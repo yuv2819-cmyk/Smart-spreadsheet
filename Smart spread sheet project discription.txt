@@ -1,0 +1,158 @@
+Smart Spreadsheet - Project Explanation
+1. High-Level Overview
+Smart Spreadsheet is an AI-powered data management tool designed for Small and Medium Businesses (SMBs). It solves the problem of complex data analysis by combining a familiar spreadsheet interface with powerful AI automation.
+
+Target Audience: Business owners and teams who need data insights without learning complex formulas or SQL.
+Core Value: "Upload data, ask questions, get answers."
+2. Frontend Architecture (Next.js 14 App Router)
+Built with React, TypeScript, Tailwind CSS, and Shadcn UI.
+
+Page Structure
+Overview (/overview): Live dashboard.
+Displays key metrics (Total Rows, Revenue, Orders) fetched from the backend.
+Features an AI "Summarize Spreadsheet" button that generates text insights.
+Automatic Visualizations: Bar and Line charts appear dynamically based on data.
+Spreadsheets (/): Corresponds to 
+app/page.tsx
+.
+The core workspace. Features a grid interface (react-data-grid) for viewing and editing data.
+Includes an AI Assistant sidebar for chat-based data interaction.
+Reports (/reports):
+Placeholder for generating and downloading PDF/CSV reports. Currently a static UI.
+Integrations (/integrations):
+Marketplace UI for connecting tools (Google Sheets, Slack). Currently non-functional UI cards.
+Settings (/settings):
+Configuration for workspace profile and preferences. Form UI exists but does not persist data.
+Key Components
+Sidebar.tsx
+: Handles app-wide navigation with active state highlighting.
+StatCard.tsx
+: Reusable component for displaying metrics with trends.
+OverviewCharts.tsx
+: Uses recharts to render data visualizations automatically.
+AIAssistant.tsx
+: Chat interface for the spreadsheet view.
+3. Backend Architecture (FastAPI)
+Built with Python (FastAPI), SQLAlchemy (Async), and Pandas.
+
+API Endpoints
+GET /api/overview/metrics:
+Calculates total rows, columns, and numeric stats (min/max/avg).
+Prepares data for frontend charts.
+POST /api/ai/summarize:
+Accepts a dataset ID.
+Uses heuristics (or OpenAI) to generate a natural language summary of the data.
+GET /api/datasets:
+Manages uploaded spreadsheet files (CSV/Excel).
+Data Storage
+Database: SQLite (for MVP simplicity), scalable to PostgreSQL.
+Models:
+Dataset
+: Metadata about the file.
+DataRow
+: Stores actual spreadsheet rows as JSON blobs for flexibility.
+4. AI Features
+The app currently features two main AI capabilities:
+
+AI Summarization (Overview Page):
+Input: Dataset metadata and sample rows.
+Process: Analyzes column names and values.
+Output: A text summary (e.g., "This dataset contains sales data...") and key insights (e.g., "Average Revenue is $230").
+Fallback: Includes a robust heuristic mode that works without an API key for demos.
+AI Assistant (Spreadsheet View):
+Interface: Chat sidebar.
+Functionality: Intended for Q&A (e.g., "Show me top sales"). (Note: Full NL-to-SQL logic is partially mocked for MVP stability).
+5. Data Flow (End-to-End)
+Ingestion: User uploads a CSV/Excel file -> Backend parses it with pandas -> Saves each row to 
+DataRow
+ table.
+Visualization:
+Frontend requests /api/overview/metrics.
+Backend aggregates 
+DataRow
+ entries -> computes stats -> returns JSON.
+Frontend receives JSON -> renders 
+StatCard
+s and passes data to 
+OverviewCharts
+ (Recharts).
+AI Analysis:
+User clicks "Summarize".
+Frontend posts to /api/ai/summarize.
+Backend samples data -> generates text -> returns JSON.
+Frontend displays the summary in an animated panel.
+6. Current State & MVP Readiness
+Status: MVP Demo-Ready
+
+Feature	Status	Notes
+Navigation	✅ Complete	Smooth transitions, full sidebar support.
+Overview	✅ Complete	Real data, charts, and AI summary working.
+Spreadsheet	⚠️ Partial	Grid view works; editing/saving is basic.
+Reports	🟡 Mock	UI only.
+Integrations	🟡 Mock	UI only.
+Settings	🟡 Mock	UI only.
+Minimum Viable Product (MVP) Definition
+To launch as a true MVP for customers, the following is required:
+
+Persistence: Settings and Spreadsheet edits must save reliably to the DB.
+Auth: User login/signup (currently single-tenant/open).
+Import: Robust CSV upload handling (currently pre-seeded or basic).
+7. Next Steps (Top 3 Priorities)
+Implement File Upload: Allow users to drag-and-drop their own CSVs to populate the grid and overview.
+Connect AI Chat: Connect the Spreadsheet Sidebar AI to the backend for real Q&A.
+User Authentication: Secure the app with Supabase or NextAuth.
+Explanation complete. Ready to define MVP scope.
+
+
+
+Smart Spreadsheet - Demo Guide
+Current Status: Demo Ready ✅
+The application is fully functional for a Minimum Viable Product (MVP) demo.
+
+Key Features Implemented
+Dynamic CSV Upload:
+Users can upload any CSV file.
+The system dynamically detects columns and data types.
+Fix: Resolved crashes with mismatched column names.
+Smart Grid:
+Spreadsheet view automatically rebuilds columns based on the uploaded data.
+Handles empty/null values gracefully.
+Real-Time Analytics:
+Overview Dashboard: Shows total rows, columns, and key numeric stats (Avg/Min/Max).
+Interactive Charts:
+Bar Chart: Compares first two numeric metrics.
+Line Chart: Trends across all numeric metrics.
+Enhanced: X-Axis now intelligently picks "Product Name" or "Date" labels instead of just row numbers.
+AI Integration:
+Summarization: Generates text summaries and key insights using OpenAI (with graceful fallback if no key).
+Context-Aware: Sends only relevant metadata (stats, column names, samples) to protect privacy and save tokens.
+How to Run the Demo
+Backend:
+bash
+cd backend
+venv\Scripts\uvicorn app.main:app --reload
+Frontend:
+bash
+cd frontend
+npm run dev
+Flow:
+Open http://localhost:3000/overview.
+Click "Upload CSV" and choose any cleaned CSV (e.g., Sales Data, Inventory).
+Watch the Stats Cards and Charts update instantly.
+Click "Summarize" to see the AI generate insights.
+Navigate to "Spreadsheet" tab to see the raw grid.
+Recommended Features for V2 🚀
+To take this from MVP to a full commercial product, I recommend adding:
+
+1. Data Cleaning & Transformation
+AI Data Cleaning: "Fix missing values", "Normalize dates", "Deduplicate rows".
+Formula Support: Add basic Excel-like formulas (=SUM(A1:A5)).
+2. Advanced Collaboration
+Real-time Cursors: See who else is viewing the sheet (using WebSockets).
+Comments: Allow users to comment on specific cells or rows.
+3. Deeper AI Capabilities
+"Chat with Data": A chat interface to ask questions like "Show me sales > 500" which filters the grid.
+Chart Generator: Let AI propose which charts to build based on the data shape.
+4. Enterprise Features
+Export: Download modified data as CSV/Excel (currently only visual).
+Role-Based Access: separate Viewer/Editor permissions.

@@ -1,0 +1,11 @@
+id,title,status,revenue,region
+1,Project Alpha,Completed,120000,North America
+2,Project Beta,In Progress,85000,Europe
+3,Project Gamma,Pending,45000,Asia
+4,Project Delta,Active,210000,North America
+5,Project Epsilon,On Hold,30000,South America
+6,Project Zeta,Completed,95000,Europe
+7,Project Eta,In Progress,150000,Asia
+8,Project Theta,Active,175000,North America
+9,Project Iota,Completed,60000,Europe
+10,Project Kappa,Pending,40000,South America

@@ -1,0 +1,35 @@
+{
+  "name": "smart-spreadsheet",
+  "version": "1.0.0",
+  "description": "An AI-powered spreadsheet application built with Next.js and FastAPI.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npm --prefix ./frontend run dev",
+    "build": "npm --prefix ./frontend run build",
+    "start": "npm --prefix ./frontend run start",
+    "backend:install": "cd backend && pip install -r requirements.txt",
+    "backend:dev": "cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "docker:up": "docker-compose up --build",
+    "docker:down": "docker-compose down",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "next": "^16.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.2",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.24",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.1.6",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3"
+  }
+}
