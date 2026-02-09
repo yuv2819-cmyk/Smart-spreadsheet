@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "antd": "^5.14.2",
     "autoprefixer": "^10.4.24",
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.8",
