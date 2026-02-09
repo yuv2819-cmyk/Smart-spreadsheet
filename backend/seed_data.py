@@ -29,14 +29,14 @@ async def seed_data():
         
         # Add rows
         rows_data = [
-            {"col0": "MacBook Pro M3", "col1": "Electronics", "col2": 1999, "col3": 45, "col4": 89955, "col5": "In Stock", "col6": "Active", "col7": "High"},
-            {"col0": "Ergonomic Chair", "col1": "Furniture", "col2": 850, "col3": 32, "col4": 27200, "col5": "In Stock", "col6": "Review", "col7": "Medium"},
-            {"col0": "Dell XPS 15", "col1": "Electronics", "col2": 2100, "col3": 18, "col4": 37800, "col5": "Low Stock", "col6": "Active", "col7": "High"},
-            {"col0": "Wool Sweater", "col1": "Clothing", "col2": 120, "col3": 156, "col4": 18720, "col5": "In Stock", "col6": "Draft", "col7": "Low"},
-            {"col0": "Smart Lamp", "col1": "Home", "col2": 60, "col3": 200, "col4": 12000, "col5": "In Stock", "col6": "Active", "col7": "Low"},
-            {"col0": "Sony XM5", "col1": "Electronics", "col2": 350, "col3": 89, "col4": 31150, "col5": "Out of Stock", "col6": "Inactive", "col7": "Medium"},
-            {"col0": "Desk Mat", "col1": "Accessories", "col2": 25, "col3": 500, "col4": 12500, "col5": "In Stock", "col6": "Active", "col7": "Low"},
-            {"col0": "Mechanical Keyb", "col1": "Electronics", "col2": 180, "col3": 45, "col4": 8100, "col5": "In Stock", "col6": "Active", "col7": "High"},
+            {"Product Name": "MacBook Pro M3", "Category": "Electronics", "Price": 1999, "Units": 45, "Revenue": 89955, "Stock Status": "In Stock", "Priority": "High"},
+            {"Product Name": "Ergonomic Chair", "Category": "Furniture", "Price": 850, "Units": 32, "Revenue": 27200, "Stock Status": "In Stock", "Priority": "Medium"},
+            {"Product Name": "Dell XPS 15", "Category": "Electronics", "Price": 2100, "Units": 18, "Revenue": 37800, "Stock Status": "Low Stock", "Priority": "High"},
+            {"Product Name": "Wool Sweater", "Category": "Clothing", "Price": 120, "Units": 156, "Revenue": 18720, "Stock Status": "In Stock", "Priority": "Low"},
+            {"Product Name": "Smart Lamp", "Category": "Home", "Price": 60, "Units": 200, "Revenue": 12000, "Stock Status": "In Stock", "Priority": "Low"},
+            {"Product Name": "Sony XM5", "Category": "Electronics", "Price": 350, "Units": 89, "Revenue": 31150, "Stock Status": "Out of Stock", "Priority": "Medium"},
+            {"Product Name": "Desk Mat", "Category": "Accessories", "Price": 25, "Units": 500, "Revenue": 12500, "Stock Status": "In Stock", "Priority": "Low"},
+            {"Product Name": "Mechanical Keyb", "Category": "Electronics", "Price": 180, "Units": 45, "Revenue": 8100, "Stock Status": "In Stock", "Priority": "High"},
         ]
         
         for i, row in enumerate(rows_data):

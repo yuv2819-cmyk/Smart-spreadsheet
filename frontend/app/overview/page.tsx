@@ -15,6 +15,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import OverviewCharts from "@/components/OverviewCharts";
 import CsvUpload from "@/components/CsvUpload";
+import { API_URL } from "@/lib/api-config";
 
 interface OverviewMetrics {
     dataset_id?: number;
@@ -39,7 +40,7 @@ export default function OverviewPage() {
 
     const fetchMetrics = async () => {
         try {
-            const response = await fetch("http://127.0.0.1:8000/overview/metrics");
+            const response = await fetch(`${API_URL}/overview/metrics`);
             if (response.ok) {
                 const data = await response.json();
                 setMetrics(data);
@@ -72,7 +73,7 @@ export default function OverviewPage() {
         }
         setIsSummarizing(true);
         try {
-            const response = await fetch("http://127.0.0.1:8000/ai/summarize", {
+            const response = await fetch(`${API_URL}/ai/summarize`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ dataset_id: metrics.dataset_id })
@@ -120,7 +121,7 @@ export default function OverviewPage() {
                                 if (confirm("Are you sure you want to clear all data? This cannot be undone.")) {
                                     setLoading(true);
                                     try {
-                                        await fetch("http://127.0.0.1:8000/datasets/clear", { method: "DELETE" });
+                                        await fetch(`${API_URL}/datasets/clear`, { method: "DELETE" });
                                         handleUploadSuccess(); // Refresh metrics (will be empty)
                                     } catch (error) {
                                         console.error("Failed to clear data:", error);

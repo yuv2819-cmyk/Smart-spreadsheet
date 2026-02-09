@@ -25,8 +25,15 @@ app = FastAPI(
 # CORS Middleware for frontend communication
 origins = [
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "http://localhost:8000",
+    "https://*.vercel.app",  # Allow all Vercel preview deployments
 ]
+
+# Allow environment variable override for custom domains
+if os.getenv("ALLOWED_ORIGINS"):
+    additional_origins = os.getenv("ALLOWED_ORIGINS").split(",")
+    origins.extend(additional_origins)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +41,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Regex for Vercel subdomain
 )
 
 # Include routers

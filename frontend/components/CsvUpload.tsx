@@ -2,8 +2,8 @@
 
 import { useState, useRef } from "react";
 import { Upload, Loader2, FileUp, CheckCircle } from "lucide-react";
-
 import { cn } from "@/lib/utils";
+import { API_URL } from "@/lib/api-config";
 
 interface CsvUploadProps {
     onUploadSuccess: () => void;
@@ -30,7 +30,7 @@ export default function CsvUpload({ onUploadSuccess }: CsvUploadProps) {
         formData.append("file", file);
 
         try {
-            const response = await fetch("http://127.0.0.1:8000/datasets/upload", {
+            const response = await fetch(`${API_URL}/datasets/upload`, {
                 method: "POST",
                 body: formData,
             });

@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { DataGrid, type Column } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
 import { cn } from "@/lib/utils";
+import { API_URL } from "@/lib/api-config";
 import {
     Plus,
     Filter,
@@ -28,7 +29,7 @@ export default function Spreadsheet() {
                 // 1. Get latest dataset ID
                 let datasetId = 1; // Default fallback
                 try {
-                    const latestRes = await fetch("http://127.0.0.1:8000/datasets/latest");
+                    const latestRes = await fetch(`${API_URL}/datasets/latest`);
                     if (latestRes.ok) {
                         const latest = await latestRes.json();
                         datasetId = latest.id;
@@ -38,7 +39,7 @@ export default function Spreadsheet() {
                 }
 
                 // 2. Fetch Data
-                const response = await fetch(`http://127.0.0.1:8000/datasets/${datasetId}/data`);
+                const response = await fetch(`${API_URL}/datasets/${datasetId}/data`);
 
                 if (response.ok) {
                     const data = await response.json();

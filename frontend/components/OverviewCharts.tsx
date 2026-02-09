@@ -12,9 +12,7 @@ import {
     Line,
     Legend
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Assuming these exist, if not I'll use standard divs
-// Actually, I should check if UI components exist. standard divs are safer for MVP if I'm not sure.
-// I'll use standard styled divs to avoid import errors.
+
 
 interface ChartComponentProps {
     data: any[];

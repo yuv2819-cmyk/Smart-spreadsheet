@@ -9,15 +9,53 @@ import {
     TrendingUp,
     Activity
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { API_URL } from "@/lib/api-config";
+
+interface OverviewMetrics {
+    total_rows: number;
+    total_columns: number;
+    numeric_columns: string[];
+    basic_stats: Record<string, { min: number; max: number; avg: number }>;
+}
 
 export default function Home() {
+    const [metrics, setMetrics] = useState<OverviewMetrics | null>(null);
+
+    useEffect(() => {
+        const fetchMetrics = async () => {
+            try {
+                const response = await fetch(`${API_URL}/overview/metrics`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setMetrics(data);
+                }
+            } catch (error) {
+                console.error("Failed to fetch metrics:", error);
+            }
+        };
+        fetchMetrics();
+    }, []);
+
+    // Calculate dynamic stats from metrics
+    const revenueCol = metrics?.numeric_columns.find(c => c.toLowerCase().includes("revenue") || c.toLowerCase().includes("sales"));
+    const ordersCol = metrics?.numeric_columns.find(c => c.toLowerCase().includes("quantity") || c.toLowerCase().includes("units"));
+
+    const totalRevenue = revenueCol && metrics?.basic_stats[revenueCol]
+        ? `$${Math.round(metrics.basic_stats[revenueCol].avg * metrics.total_rows).toLocaleString()}`
+        : "$361,005";
+    const totalOrders = metrics?.total_rows ? metrics.total_rows.toLocaleString() : "1,250";
+    const avgOrderValue = revenueCol && metrics?.basic_stats[revenueCol]
+        ? `$${Math.round(metrics.basic_stats[revenueCol].avg)}`
+        : "$288";
+
     return (
         <div className="flex flex-col gap-6 h-full min-h-[calc(100vh-6rem)]">
             {/* Stats Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <StatCard
                     title="Total Revenue"
-                    value="$361,005"
+                    value={totalRevenue}
                     trend="+12.5%"
                     trendUp={true}
                     icon={DollarSign}
@@ -25,7 +63,7 @@ export default function Home() {
                 />
                 <StatCard
                     title="Total Orders"
-                    value="1,250"
+                    value={totalOrders}
                     trend="+8.2%"
                     trendUp={true}
                     icon={ShoppingCart}
@@ -33,7 +71,7 @@ export default function Home() {
                 />
                 <StatCard
                     title="Avg. Order Value"
-                    value="$288"
+                    value={avgOrderValue}
                     trend="-2.4%"
                     trendUp={false}
                     icon={Activity}

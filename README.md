@@ -2,19 +2,27 @@
 
 An AI-powered spreadsheet application built with Next.js and FastAPI.
 
+## Features
+
+✨ **Dynamic Spreadsheet** - Upload and view CSV files  
+🤖 **AI Data Analyst** - Get instant insights powered by OpenAI  
+📊 **Interactive Charts** - Visualize data with charts  
+📈 **Real-time Metrics** - Automatic statistics  
+🎨 **Modern UI** - Beautiful, premium design  
+☁️ **Cloud Ready** - Deploy to Vercel + Railway
+
 ## Project Structure
 
 - `frontend/`: Next.js application (React + Tailwind CSS)
 - `backend/`: FastAPI application (Python)
-- `docker-compose.yml`: Orchestrates the services
 
 ## Getting Started
 
 ### Prerequisites
 
-- Docker Desktop installed and running.
-- Node.js (optional, for local frontend development).
-- Python (optional, for local backend development).
+- Node.js 18+
+- Python 3.11+ / Anaconda
+- OpenAI API key (for AI features)
 
 ### Running with Docker (Recommended)
 
@@ -42,16 +50,26 @@ An AI-powered spreadsheet application built with Next.js and FastAPI.
    cd backend
    ```
 
-2. Create a virtual environment and install dependencies:
+2. Install dependencies:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
    pip install -r requirements.txt
    ```
 
-3. Run the server:
+3. Create `.env` file:
    ```bash
-   uvicorn app.main:app --reload
+   cp .env.example .env
+   # Edit .env and add your OPENAI_API_KEY
+   ```
+
+4. Initialize database:
+   ```bash
+   python init_db.py
+   python seed_data.py  # Optional sample data
+   ```
+
+5. Run the server:
+   ```bash
+   python -m uvicorn app.main:app --reload
    ```
 
 #### Frontend
@@ -71,8 +89,58 @@ An AI-powered spreadsheet application built with Next.js and FastAPI.
    npm run dev
    ```
 
-## Features
+4. Open [http://localhost:3000](http://localhost:3000)
 
-- **Grid Interface**: Spreadsheet-like data entry.
-- **AI Integration**: Ask questions in natural language.
-- **Multi-tenancy**: Secure data isolation.
+## Environment Variables
+
+### Frontend (`.env.local`)
+```bash
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+### Backend (`.env`)
+```bash
+DATABASE_URL=sqlite+aiosqlite:///./smart_spreadsheet.db
+OPENAI_API_KEY=your-openai-api-key-here
+ENVIRONMENT=development
+```
+
+## Deployment
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for complete deployment instructions to:
+- ✅ **Vercel** (Frontend)  
+- ✅ **Railway** (Backend - Recommended)  
+- 📦 Alternative: Render, Fly.io
+
+The application is **deployment-ready** with:
+- Environment-based API configuration
+- CORS configured for Vercel
+- Production build tested and working
+- PostgreSQL support for production
+
+## Application Features
+
+- **Grid Interface**: Spreadsheet-like data entry and viewing
+- **AI Integration**: Ask questions in natural language
+- **CSV Upload**: Import your own data
+- **Multi-tenancy**: Secure data isolation
+- **Analytics Dashboard**: Real-time metrics and charts
+- **Data Visualization**: Bar charts and line graphs
+
+## API Documentation
+
+API docs available at: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+## Build for Production
+
+```bash
+cd frontend
+npm run build
+npm start
+```
+
+Build tested and working! ✅
+
+---
+
+**Built with ❤️ using Next.js, FastAPI, and OpenAI**
