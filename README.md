@@ -24,6 +24,15 @@ An AI-powered spreadsheet application built with Next.js and FastAPI.
 - Python 3.11+ / Anaconda
 - OpenAI API key (for AI features)
 
+### One-Click Start (Windows)
+
+Run `index.bat` from the project root to:
+- start backend on `http://localhost:8000` (if not already running)
+- start frontend on `http://localhost:3000` (if not already running)
+- open the app in your browser automatically
+
+For local development on your machine, this is the easiest option.
+
 ### Running with Docker (Recommended)
 
 1. Navigate to the project directory:
