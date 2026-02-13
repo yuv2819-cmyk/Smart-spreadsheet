@@ -5,14 +5,43 @@ from app.database import get_db
 from app.models import AIQuery, Dataset, DataRow
 from app.schemas import AIQueryRequest, AIQueryResponse, AISummaryRequest, AISummaryResponse
 import pandas as pd
-import openai
+from openai import OpenAI
 import os
 import time
 import json
 
 router = APIRouter(prefix="/ai", tags=["AI Assistant"])
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+PLACEHOLDER_OPENAI_KEYS = {
+    "",
+    "your-openai-api-key-here",
+    "your_openai_api_key_here",
+}
+
+
+def _is_placeholder_api_key(value: str | None) -> bool:
+    if not value:
+        return True
+    return value.strip().lower() in PLACEHOLDER_OPENAI_KEYS
+
+
+def _build_fallback_response(prompt: str, sample_data: list[dict], reason: str) -> tuple[str, dict]:
+    generated_code = f"""
+# AI-Generated Analysis for: {prompt}
+import pandas as pd
+
+df = pd.DataFrame({json.dumps(sample_data)})
+result = df.describe(include='all').to_dict()
+"""
+    result_data = {
+        "generated": False,
+        "message": "OpenAI is unavailable right now. Returning fallback analysis output.",
+        "reason": reason,
+        "sample_data": sample_data[:3],
+    }
+    return generated_code, result_data
 
 @router.post("/query", response_model=AIQueryResponse)
 async def generate_ai_query(
@@ -41,35 +70,32 @@ async def generate_ai_query(
     sample_data = [row.row_data for row in sample_rows]
     
     # Generate code using OpenAI (simplified for MVP)
-    try:
-        # For MVP, return a mock response if no API key
-        if not openai.api_key or openai.api_key == "your_openai_api_key_here":
-            generated_code = f"""
-# AI-Generated Analysis for: {request.prompt}
-import pandas as pd
-
-# Sample code based on your prompt
-df = pd.DataFrame({json.dumps(sample_data)})
-result = df.describe().to_dict()
-"""
-            result_data = {
-                "message": "This is a mock response. Add your OpenAI API key to get real AI-generated code.",
-                "sample_data": sample_data[:3]
-            }
-        else:
-            # Real OpenAI call
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
+    # Default to fallback if key is missing/placeholder or provider errors out.
+    if _is_placeholder_api_key(client.api_key):
+        generated_code, result_data = _build_fallback_response(
+            request.prompt,
+            sample_data,
+            "missing_or_placeholder_api_key"
+        )
+    else:
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a data analysis assistant. Generate Python pandas code to answer the user's question."},
-                    {"role": "user", "content": f"Dataset schema: {dataset.schema_info}\nSample data: {sample_data[:3]}\n\nQuestion: {request.prompt}"}
-                ]
+                    {"role": "system", "content": "You are a helpful data analysis assistant. Answer the user's question about their data clearly and concisely. Provide insights and observations."},
+                    {"role": "user", "content": f"Dataset schema: {dataset.schema_info}\n\nSample data (first 3 rows): {json.dumps(sample_data[:3], indent=2)}\n\nQuestion: {request.prompt}\n\nProvide a helpful answer based on the data."}
+                ],
+                temperature=0.7,
+                max_tokens=500
             )
-            generated_code = response.choices[0].message.content
+            generated_code = response.choices[0].message.content or "No response returned from model."
             result_data = {"generated": True}
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+        except Exception as exc:
+            generated_code, result_data = _build_fallback_response(
+                request.prompt,
+                sample_data,
+                f"openai_error: {str(exc)}"
+            )
     
     execution_time = int((time.time() - start_time) * 1000)
     

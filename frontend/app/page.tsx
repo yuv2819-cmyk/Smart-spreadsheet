@@ -39,7 +39,6 @@ export default function Home() {
 
     // Calculate dynamic stats from metrics
     const revenueCol = metrics?.numeric_columns.find(c => c.toLowerCase().includes("revenue") || c.toLowerCase().includes("sales"));
-    const ordersCol = metrics?.numeric_columns.find(c => c.toLowerCase().includes("quantity") || c.toLowerCase().includes("units"));
 
     const totalRevenue = revenueCol && metrics?.basic_stats[revenueCol]
         ? `$${Math.round(metrics.basic_stats[revenueCol].avg * metrics.total_rows).toLocaleString()}`

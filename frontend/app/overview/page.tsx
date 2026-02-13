@@ -12,7 +12,6 @@ import {
     Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import OverviewCharts from "@/components/OverviewCharts";
 import CsvUpload from "@/components/CsvUpload";
 import { API_URL } from "@/lib/api-config";
@@ -24,7 +23,7 @@ interface OverviewMetrics {
     numeric_columns: string[];
     last_updated: string | null;
     basic_stats: Record<string, { min: number; max: number; avg: number }>;
-    chart_data: any[];
+    chart_data: Array<Record<string, string | number | null>>;
 }
 
 interface AISummary {

@@ -1,0 +1,27 @@
+Date,Product,Category,Region,Sales_Amount,Units_Sold,Customer_Satisfaction
+2024-01-15,Laptop Pro,Electronics,North,1299.99,45,4.8
+2024-01-16,Wireless Mouse,Electronics,South,29.99,120,4.5
+2024-01-17,Office Chair,Furniture,East,249.99,30,4.7
+2024-01-18,Desk Lamp,Furniture,West,89.99,55,4.6
+2024-01-19,Smartphone X,Electronics,North,799.99,65,4.9
+2024-01-20,USB Cable,Electronics,South,12.99,200,4.3
+2024-01-21,Monitor 27inch,Electronics,East,399.99,40,4.8
+2024-01-22,Keyboard Mechanical,Electronics,West,149.99,75,4.7
+2024-01-23,Standing Desk,Furniture,North,599.99,20,4.9
+2024-01-24,Webcam HD,Electronics,South,79.99,85,4.4
+2024-01-25,Headphones Pro,Electronics,East,199.99,95,4.8
+2024-01-26,Mouse Pad,Electronics,West,19.99,150,4.2
+2024-01-27,Tablet 10inch,Electronics,North,449.99,50,4.6
+2024-01-28,Printer Laser,Electronics,South,329.99,35,4.5
+2024-01-29,Bookshelf,Furniture,East,179.99,25,4.7
+2024-01-30,Coffee Table,Furniture,West,299.99,18,4.6
+2024-02-01,Smart Watch,Electronics,North,349.99,60,4.8
+2024-02-02,External SSD 1TB,Electronics,South,159.99,70,4.9
+2024-02-03,Filing Cabinet,Furniture,East,249.99,22,4.5
+2024-02-04,Desk Organizer,Furniture,West,39.99,90,4.3
+2024-02-05,Laptop Bag,Electronics,North,69.99,100,4.6
+2024-02-06,Power Bank,Electronics,South,49.99,110,4.4
+2024-02-07,Gaming Chair,Furniture,East,449.99,28,4.9
+2024-02-08,Wireless Charger,Electronics,West,34.99,125,4.5
+2024-02-09,Bluetooth Speaker,Electronics,North,129.99,80,4.7
+2024-02-10,Conference Table,Furniture,South,899.99,12,4.8

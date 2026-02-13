@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { DataGrid, type Column } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
-import { cn } from "@/lib/utils";
 import { API_URL } from "@/lib/api-config";
 import {
-    Plus,
     Filter,
     Download,
     MoreHorizontal,
@@ -34,7 +32,7 @@ export default function Spreadsheet() {
                         const latest = await latestRes.json();
                         datasetId = latest.id;
                     }
-                } catch (e) {
+                } catch {
                     console.warn("Could not fetch latest dataset ID, using default 1");
                 }
 

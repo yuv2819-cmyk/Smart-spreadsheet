@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Upload, Loader2, FileUp, CheckCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_URL } from "@/lib/api-config";
 

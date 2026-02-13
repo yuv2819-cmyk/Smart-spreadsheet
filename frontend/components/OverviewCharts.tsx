@@ -13,9 +13,10 @@ import {
     Legend
 } from "recharts";
 
+type ChartDataPoint = Record<string, string | number | null>;
 
 interface ChartComponentProps {
-    data: any[];
+    data: ChartDataPoint[];
     numericColumns: string[];
 }
 
