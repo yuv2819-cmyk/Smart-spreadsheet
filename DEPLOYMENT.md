@@ -36,7 +36,7 @@ ALLOW_VERCEL_PREVIEW_ORIGINS=false
 - Root directory: `backend`
 - Start command:
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers
+sh start.sh
 ```
 - Add PostgreSQL and wire `DATABASE_URL`.
 - Verify:

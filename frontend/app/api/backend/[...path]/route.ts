@@ -2,7 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const BACKEND_BASE_URL = (process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").trim();
+const RAW_BACKEND_BASE_URL = (process.env.BACKEND_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://127.0.0.1:8000").trim();
+
+function normalizeBackendBaseUrl(raw: string): string {
+    const trimmed = (raw || "").trim();
+    // In production, always prefer HTTPS. If someone accidentally sets an http:// backend URL,
+    // Next's fetch will follow a 307/308 redirect for GETs, but POSTs can fail because the body
+    // stream can't be resent. Auto-upgrading avoids that class of failures.
+    if (process.env.NODE_ENV === "production" && /^http:\/\//i.test(trimmed)) {
+        return trimmed.replace(/^http:\/\//i, "https://");
+    }
+    return trimmed;
+}
+
+const BACKEND_BASE_URL = normalizeBackendBaseUrl(RAW_BACKEND_BASE_URL);
 const BACKEND_API_TOKEN = (process.env.BACKEND_API_TOKEN || process.env.MVP_API_TOKEN || "").trim();
 const BACKEND_TENANT_ID = (process.env.BACKEND_TENANT_ID || "1").trim();
 const BACKEND_USER_ID = (process.env.BACKEND_USER_ID || "1").trim();
