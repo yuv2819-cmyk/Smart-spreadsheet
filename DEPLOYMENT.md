@@ -15,11 +15,13 @@ ENVIRONMENT=production
 DATABASE_URL=postgresql+asyncpg://user:password@host:5432/smart_spreadsheet
 AUTH_JWT_SECRET=<long-random-secret-at-least-32-chars>
 ALLOWED_ORIGINS=https://your-frontend-domain
-TRUSTED_HOSTS=your-frontend-domain
+TRUSTED_HOSTS=your-backend-domain
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 ENABLE_HTTPS_REDIRECT=true
-AUTO_CREATE_SCHEMA=false
+# This repo currently uses SQLAlchemy `create_all` for initial schema creation (no Alembic migrations yet).
+# Keep AUTO_CREATE_SCHEMA=true for first deploy so tables exist for signup/upload.
+AUTO_CREATE_SCHEMA=true
 AUTO_SEED_MVP_RECORDS=false
 ```
 
@@ -81,3 +83,6 @@ docker-compose -f docker-compose.prod.yml up --build -d
 ```
 
 Edit `.env` first with real secrets.
+
+Notes:
+- When using Docker Compose, include `backend` in `TRUSTED_HOSTS` (the internal service hostname used by the Next.js proxy).

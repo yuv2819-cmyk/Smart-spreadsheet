@@ -10,6 +10,9 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # We accept comma-separated strings for list settings (see _split_csv).
+        # Disabling decoding avoids pydantic-settings trying to JSON-decode list fields.
+        enable_decoding=False,
         extra="ignore",
     )
 
@@ -42,6 +45,37 @@ class Settings(BaseSettings):
     default_tenant_subdomain: str = "demo"
     default_admin_email: str = "admin@demo.com"
     default_admin_password: str = "admin12345"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, value: object) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            return str(value)
+
+        url = value.strip()
+        if not url:
+            return ""
+
+        if "://" not in url:
+            return url
+
+        scheme, rest = url.split("://", 1)
+        normalized_scheme = scheme
+
+        # Common managed Postgres providers (Railway/Render/etc.) expose `postgres://` or `postgresql://`.
+        # Our app uses SQLAlchemy async engine, so normalize to `postgresql+asyncpg://`.
+        if scheme in {"postgres", "postgresql"}:
+            normalized_scheme = "postgresql+asyncpg"
+
+        # Developers sometimes provide sync sqlite URLs; normalize to async driver.
+        if scheme == "sqlite":
+            normalized_scheme = "sqlite+aiosqlite"
+
+        if normalized_scheme == scheme:
+            return url
+        return f"{normalized_scheme}://{rest}"
 
     @field_validator("allowed_origins", "trusted_hosts", mode="before")
     @classmethod

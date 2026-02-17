@@ -36,7 +36,7 @@ Required for production:
 - `DATABASE_URL=postgresql+asyncpg://...`
 - `AUTH_JWT_SECRET=<long-random-secret>`
 - `ALLOWED_ORIGINS=https://your-frontend-domain`
-- `TRUSTED_HOSTS=your-frontend-domain`
+- `TRUSTED_HOSTS=your-backend-domain` (add `backend` too when using Docker Compose)
 
 Common:
 - `OPENAI_API_KEY=...`

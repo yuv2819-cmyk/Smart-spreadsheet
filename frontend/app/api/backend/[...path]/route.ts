@@ -24,16 +24,24 @@ const HOP_BY_HOP_HEADERS = new Set([
 
 function resolveAuthToken(): string {
     if (BACKEND_API_TOKEN) return BACKEND_API_TOKEN;
-    if (process.env.NODE_ENV === "production") {
-        throw new Error("BACKEND_API_TOKEN is required in production");
-    }
-    return "dev-insecure-token";
+    // In production, most requests should arrive with a user JWT from the browser.
+    // Keep the dev fallback for local workflows that use the legacy MVP API token.
+    if (process.env.NODE_ENV !== "production") return "dev-insecure-token";
+    return "";
 }
 
 function buildTargetUrl(path: string[], search: string): string {
     const safeBase = BACKEND_BASE_URL.replace(/\/+$/, "");
     const safePath = path.join("/");
     return `${safeBase}/${safePath}${search}`;
+}
+
+function allowsAnonymous(path: string[]): boolean {
+    const joined = path.join("/");
+    if (!joined) return true;
+    if (joined === "health" || joined === "ready") return true;
+    if (joined.startsWith("auth/signin") || joined.startsWith("auth/signup")) return true;
+    return false;
 }
 
 async function proxyRequest(req: NextRequest, path: string[]): Promise<NextResponse> {
@@ -48,18 +56,15 @@ async function proxyRequest(req: NextRequest, path: string[]): Promise<NextRespo
 
     const hasIncomingAuth = headers.has("authorization");
     if (!hasIncomingAuth) {
-        let authToken = "";
-        try {
-            authToken = resolveAuthToken();
-        } catch (error) {
-            return NextResponse.json(
-                { detail: error instanceof Error ? error.message : "Backend proxy not configured" },
-                { status: 500 }
-            );
+        // Allow unauthenticated proxying for open endpoints (signup/signin/health/ready).
+        if (!allowsAnonymous(path)) {
+            const authToken = resolveAuthToken();
+            if (authToken) {
+                headers.set("Authorization", `Bearer ${authToken}`);
+                if (!headers.has("X-Tenant-Id")) headers.set("X-Tenant-Id", BACKEND_TENANT_ID);
+                if (!headers.has("X-User-Id")) headers.set("X-User-Id", BACKEND_USER_ID);
+            }
         }
-        headers.set("Authorization", `Bearer ${authToken}`);
-        if (!headers.has("X-Tenant-Id")) headers.set("X-Tenant-Id", BACKEND_TENANT_ID);
-        if (!headers.has("X-User-Id")) headers.set("X-User-Id", BACKEND_USER_ID);
     } else {
         headers.delete("x-tenant-id");
         headers.delete("x-user-id");

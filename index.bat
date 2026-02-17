@@ -39,7 +39,7 @@ if "!PORT_OPEN!"=="1" (
   echo [OK] Backend already running on port 8000.
 ) else (
   echo [..] Starting backend on port 8000...
-  start "Smart Spreadsheet Backend" cmd /k "cd /d ""%ROOT%backend"" && ""%BACKEND_PY%"" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+  start "Smart Spreadsheet Backend" cmd /k "cd /d ""%ROOT%backend"" && ""%BACKEND_PY%"" -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 )
 
 call :is_port_open 3000
@@ -61,8 +61,8 @@ timeout /t 1 /nobreak >nul
 goto :wait_frontend
 
 :open_browser
-echo [OK] Opening http://localhost:3000
-start "" "http://localhost:3000"
+echo [OK] Opening http://localhost:3000/signin
+start "" "http://localhost:3000/signin"
 goto :done
 
 :is_port_open
