@@ -20,5 +20,4 @@ USER appuser
 
 EXPOSE 8000 8080
 
-# Use the platform-provided PORT when available (Railway/Render/etc.).
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --proxy-headers"]
+CMD ["sh", "start.sh"]
