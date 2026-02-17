@@ -24,7 +24,15 @@ services:
     container_name: smart-spreadsheet-frontend
     ports:
       - "3000:3000"
+    environment:
+      BACKEND_API_URL: http://backend:8000
+      BACKEND_API_TOKEN: ${MVP_API_TOKEN:-dev-insecure-token}
+      BACKEND_TENANT_ID: ${BACKEND_TENANT_ID:-1}
+      BACKEND_USER_ID: ${BACKEND_USER_ID:-1}
     restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
     networks:
       - smart-spreadsheet-network
 

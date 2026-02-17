@@ -1,0 +1,71 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart-spreadsheet-backend
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: ${DATABASE_URL}
+      MVP_API_TOKEN: ${MVP_API_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS}
+      ENABLE_HTTPS_REDIRECT: ${ENABLE_HTTPS_REDIRECT:-true}
+      AUTO_CREATE_SCHEMA: ${AUTO_CREATE_SCHEMA:-false}
+      AUTO_SEED_MVP_RECORDS: ${AUTO_SEED_MVP_RECORDS:-false}
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-10485760}
+      OVERVIEW_CACHE_TTL_SECONDS: ${OVERVIEW_CACHE_TTL_SECONDS:-30}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - smart-spreadsheet-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smart-spreadsheet-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE: /api/backend
+      BACKEND_API_URL: http://backend:8000
+      BACKEND_API_TOKEN: ${MVP_API_TOKEN}
+      BACKEND_TENANT_ID: ${BACKEND_TENANT_ID:-1}
+      BACKEND_USER_ID: ${BACKEND_USER_ID:-1}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - smart-spreadsheet-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: smart-spreadsheet-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart-spreadsheet-network
+
+volumes:
+  postgres_data:
+
+networks:
+  smart-spreadsheet-network:
+    driver: bridge

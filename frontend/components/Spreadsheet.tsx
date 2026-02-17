@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { DataGrid, type Column } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
-import { API_URL } from "@/lib/api-config";
+import { apiFetch } from "@/lib/api-client";
 import {
     Filter,
     Download,
@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 
 interface Row {
-    id: number;
+    __rowId: string;
+    __index: number;
     [key: string]: string | number | null;
 }
 
@@ -27,7 +28,7 @@ export default function Spreadsheet() {
                 // 1. Get latest dataset ID
                 let datasetId = 1; // Default fallback
                 try {
-                    const latestRes = await fetch(`${API_URL}/datasets/latest`);
+                    const latestRes = await apiFetch("/datasets/latest");
                     if (latestRes.ok) {
                         const latest = await latestRes.json();
                         datasetId = latest.id;
@@ -37,7 +38,7 @@ export default function Spreadsheet() {
                 }
 
                 // 2. Fetch Data
-                const response = await fetch(`${API_URL}/datasets/${datasetId}/data`);
+                const response = await apiFetch(`/datasets/${datasetId}/data`);
 
                 if (response.ok) {
                     const data = await response.json();
@@ -46,16 +47,16 @@ export default function Spreadsheet() {
                         const firstRow = data.data[0];
                         const dynamicCols: Column<Row>[] = [
                             {
-                                key: "id",
+                                key: "__index",
                                 name: "#",
                                 width: 50,
                                 frozen: true,
-                                renderCell: ({ row }) => <div className="text-center text-muted-foreground">{row.id + 1}</div>
+                                renderCell: ({ row }) => <div className="text-center text-muted-foreground">{row.__index + 1}</div>
                             }
                         ];
 
-                        // Get all keys except 'id' (and exclude internal keys if any)
-                        const keys = Object.keys(firstRow).filter(k => k !== "id");
+                        // Exclude internal keys only.
+                        const keys = Object.keys(firstRow).filter((k) => k !== "__rowId" && k !== "__index");
 
                         keys.forEach(key => {
                             // Simple heuristic for width or formatting could go here
@@ -81,8 +82,9 @@ export default function Spreadsheet() {
                         // 2. Map rows
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const mappedRows = data.data.map((r: any, index: number) => ({
-                            id: index, // Ensure ID is controlled by frontend index for grid stability
-                            ...r
+                            ...r,
+                            __index: index,
+                            __rowId: `row-${datasetId}-${index}-${String(r?.id ?? "")}`
                         }));
                         setRows(mappedRows);
                     } else {
@@ -107,7 +109,7 @@ export default function Spreadsheet() {
         fetchData();
     }, []);
 
-    const rowKeyGetter = (row: Row) => row.id;
+    const rowKeyGetter = (row: Row) => row.__rowId;
 
     if (loading) {
         return (

@@ -1,20 +1,26 @@
-FROM node:18-alpine
-
-# Needed for some npm packages
-RUN apk add --no-cache libc6-compat
-
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Copy only package files first (important for caching)
 COPY package.json package-lock.json ./
+RUN npm ci
 
-RUN npm install --legacy-peer-deps --verbose
-
-# Copy rest AFTER install
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
 RUN npm run build
 
-EXPOSE 3000
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/next.config.js ./next.config.js
+
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+EXPOSE 3000
 CMD ["npm", "run", "start"]

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -58,7 +58,7 @@ class Dataset(DatasetBase):
 # AI Query Schemas
 class AIQueryRequest(BaseModel):
     dataset_id: int
-    prompt: str
+    prompt: str = Field(min_length=1, max_length=2000)
 
 class AIQueryResponse(BaseModel):
     id: int
@@ -90,7 +90,8 @@ class OverviewMetrics(BaseModel):
     numeric_columns: List[str]
     last_updated: Optional[datetime] = None
     basic_stats: Dict[str, Dict[str, float]]  # {col_name: {min, max, avg}}
-    chart_data: List[Dict[str, Any]] = [] # For Recharts
+    chart_data: List[Dict[str, Any]] = Field(default_factory=list)  # For Recharts
+    analyst_insights: Optional[Dict[str, Any]] = None
 
 # AI Summary Schema
 class AISummaryRequest(BaseModel):

@@ -14,7 +14,8 @@ import {
 import { useState, useEffect } from "react";
 import OverviewCharts from "@/components/OverviewCharts";
 import CsvUpload from "@/components/CsvUpload";
-import { API_URL } from "@/lib/api-config";
+import { apiFetch } from "@/lib/api-client";
+import AnalystInsightsPanel, { type AnalystInsights } from "@/components/AnalystInsightsPanel";
 
 interface OverviewMetrics {
     dataset_id?: number;
@@ -24,6 +25,7 @@ interface OverviewMetrics {
     last_updated: string | null;
     basic_stats: Record<string, { min: number; max: number; avg: number }>;
     chart_data: Array<Record<string, string | number | null>>;
+    analyst_insights?: AnalystInsights | null;
 }
 
 interface AISummary {
@@ -39,7 +41,7 @@ export default function OverviewPage() {
 
     const fetchMetrics = async () => {
         try {
-            const response = await fetch(`${API_URL}/overview/metrics`);
+            const response = await apiFetch("/overview/metrics");
             if (response.ok) {
                 const data = await response.json();
                 setMetrics(data);
@@ -72,7 +74,7 @@ export default function OverviewPage() {
         }
         setIsSummarizing(true);
         try {
-            const response = await fetch(`${API_URL}/ai/summarize`, {
+            const response = await apiFetch("/ai/summarize", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ dataset_id: metrics.dataset_id })
@@ -120,7 +122,7 @@ export default function OverviewPage() {
                                 if (confirm("Are you sure you want to clear all data? This cannot be undone.")) {
                                     setLoading(true);
                                     try {
-                                        await fetch(`${API_URL}/datasets/clear`, { method: "DELETE" });
+                                        await apiFetch("/datasets/clear", { method: "DELETE" });
                                         handleUploadSuccess(); // Refresh metrics (will be empty)
                                     } catch (error) {
                                         console.error("Failed to clear data:", error);
@@ -163,6 +165,11 @@ export default function OverviewPage() {
                 </div>
             )}
 
+            {/* Analyst Insight Panels */}
+            {!!metrics?.analyst_insights && metrics.total_rows > 0 && (
+                <AnalystInsightsPanel insights={metrics.analyst_insights} />
+            )}
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
@@ -192,7 +199,7 @@ export default function OverviewPage() {
                 <StatCard
                     title="Columns"
                     value={metrics?.total_columns.toString() || "0"}
-                    trend={metrics?.numeric_columns.length + " Numeric"}
+                    trend={`${metrics?.numeric_columns.length ?? 0} Numeric`}
                     trendUp={true}
                     icon={Activity}
                     color="emerald"

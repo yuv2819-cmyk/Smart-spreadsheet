@@ -3,8 +3,15 @@ import urllib.parse
 import json
 import sys
 import io
+import os
 
 BASE_URL = "http://localhost:8000"
+API_TOKEN = os.getenv("BACKEND_API_TOKEN", "dev-insecure-token")
+AUTH_HEADERS = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "X-Tenant-Id": os.getenv("BACKEND_TENANT_ID", "1"),
+    "X-User-Id": os.getenv("BACKEND_USER_ID", "1"),
+}
 
 def run_test():
     print("1. Creating sample CSV...")
@@ -22,7 +29,8 @@ def run_test():
     )
     
     headers = {
-        "Content-Type": f"multipart/form-data; boundary={boundary}"
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        **AUTH_HEADERS,
     }
     
     print("2. Uploading CSV...")
@@ -38,7 +46,8 @@ def run_test():
 
     print("3. Fetching Metrics...")
     try:
-        with urllib.request.urlopen(f"{BASE_URL}/overview/metrics") as response:
+        metrics_req = urllib.request.Request(f"{BASE_URL}/overview/metrics", headers=AUTH_HEADERS)
+        with urllib.request.urlopen(metrics_req) as response:
              metrics = json.loads(response.read().decode())
              print(f"Metrics: {metrics}")
              
@@ -58,7 +67,7 @@ def run_test():
     req_summary = urllib.request.Request(
         f"{BASE_URL}/ai/summarize", 
         data=json.dumps({"dataset_id": dataset_id}).encode('utf-8'),
-        headers={"Content-Type": "application/json"},
+        headers={**AUTH_HEADERS, "Content-Type": "application/json"},
         method="POST"
     )
     try:

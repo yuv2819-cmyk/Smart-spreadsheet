@@ -1,16 +1,19 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from app.config import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/smart_spreadsheet")
+settings = get_settings()
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.sql_echo,
+    pool_pre_ping=True,
+)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:

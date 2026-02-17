@@ -1,102 +1,170 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from app.database import get_db
-from app.models import Dataset, DataRow
-from app.schemas import OverviewMetrics
-import pandas as pd
+import time
 from datetime import datetime
 
+import pandas as pd
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import RequestContext, get_request_context
+from app.config import get_settings
+from app.database import get_db
+from app.models import DataRow, Dataset
+from app.schemas import OverviewMetrics
+from app.services.analytics_service import build_analyst_insights
+
 router = APIRouter(prefix="/overview", tags=["Overview"])
+settings = get_settings()
+
+_overview_cache: dict[int, dict] = {}
+
+
+def _dataset_cache_key(dataset: Dataset) -> str:
+    updated = dataset.updated_at or dataset.created_at
+    return f"{dataset.id}:{dataset.row_count}:{updated.isoformat() if updated else 'none'}"
+
+
+def _cache_metrics(dataset_id: int, cache_key: str, cached_at: float, payload: OverviewMetrics) -> None:
+    _overview_cache[dataset_id] = {
+        "cache_key": cache_key,
+        "cached_at": cached_at,
+        "payload": payload,
+    }
+    if len(_overview_cache) > 50:
+        oldest_dataset_id = min(_overview_cache.items(), key=lambda item: item[1]["cached_at"])[0]
+        _overview_cache.pop(oldest_dataset_id, None)
+
 
 @router.get("/metrics", response_model=OverviewMetrics)
 async def get_overview_metrics(
-    db: AsyncSession = Depends(get_db)
+    context: RequestContext = Depends(get_request_context),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get metrics for the primary dataset (MVP: dataset_id=1)"""
-    # 1. Fetch latest dataset info
+    """Get metrics for the latest dataset in the authenticated tenant."""
     dataset_result = await db.execute(
         select(Dataset)
-        .where(Dataset.tenant_id == 1)
+        .where(Dataset.tenant_id == context.tenant_id)
         .order_by(Dataset.created_at.desc())
         .limit(1)
     )
     dataset = dataset_result.scalar_one_or_none()
-    
+
     if not dataset:
-        # Return empty state if no dataset found
         return OverviewMetrics(
             total_rows=0,
             total_columns=0,
             numeric_columns=[],
             last_updated=None,
-            basic_stats={}
+            basic_stats={},
+            analyst_insights={
+                "executive_summary": "No dataset is available yet. Upload a CSV to generate insights.",
+                "recommendations": ["Upload a CSV file to begin analysis."],
+                "data_quality": {
+                    "rows_analyzed": 0,
+                    "columns_analyzed": 0,
+                    "duplicate_rows": 0,
+                    "duplicate_pct": 0.0,
+                    "completeness_pct": 0.0,
+                    "high_missing_columns": [],
+                },
+                "numeric_profiles": [],
+                "categorical_profiles": [],
+                "top_correlations": [],
+                "segments": [],
+                "trend": None,
+                "kpis": {},
+            },
         )
 
-    # 2. Fetch all data rows
+    cache_key = _dataset_cache_key(dataset)
+    cached = _overview_cache.get(dataset.id)
+    now = time.time()
+    if cached and cached["cache_key"] == cache_key and (now - cached["cached_at"]) < settings.overview_cache_ttl_seconds:
+        return cached["payload"]
+
     rows_result = await db.execute(
-        select(DataRow).where(DataRow.dataset_id == dataset.id)
+        select(DataRow).where(
+            DataRow.tenant_id == context.tenant_id,
+            DataRow.dataset_id == dataset.id,
+        )
     )
     rows = rows_result.scalars().all()
-    
+
     if not rows:
-         return OverviewMetrics(
+        payload = OverviewMetrics(
+            dataset_id=dataset.id,
             total_rows=0,
             total_columns=0,
             numeric_columns=[],
             last_updated=dataset.updated_at,
-            basic_stats={}
+            basic_stats={},
+            chart_data=[],
+            analyst_insights={
+                "executive_summary": "Dataset has no rows. Upload non-empty CSV data to generate insights.",
+                "recommendations": ["Upload a CSV with rows to enable analyst insights."],
+                "data_quality": {
+                    "rows_analyzed": 0,
+                    "columns_analyzed": 0,
+                    "duplicate_rows": 0,
+                    "duplicate_pct": 0.0,
+                    "completeness_pct": 0.0,
+                    "high_missing_columns": [],
+                },
+                "numeric_profiles": [],
+                "categorical_profiles": [],
+                "top_correlations": [],
+                "segments": [],
+                "trend": None,
+                "kpis": {},
+            },
         )
+        _cache_metrics(dataset.id, cache_key, now, payload)
+        return payload
 
-    # 3. Process with Pandas
-    row_data = [r.row_data for r in rows]
+    row_data = [row.row_data for row in rows]
     df = pd.DataFrame(row_data)
-    
-    # Identify numeric columns
-    numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-    
-    # Calculate stats
-    basic_stats = {}
+
+    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+    basic_stats: dict[str, dict[str, float]] = {}
     for col in numeric_cols:
         basic_stats[col] = {
             "min": float(df[col].min()),
             "max": float(df[col].max()),
-            "avg": float(df[col].mean())
+            "avg": float(df[col].mean()),
         }
-        
-    # Prepare chart data (subset for visualization)
-    # We'll take the first 10 rows and only numeric columns for the bar chart
-    chart_data = []
+
+    chart_data: list[dict] = []
     if numeric_cols:
-        # Find a suitable string column for labels (e.g. Name, Date, Product)
         label_col = None
-        string_cols = df.select_dtypes(include=['object', 'string']).columns.tolist()
+        string_cols = df.select_dtypes(include=["object", "string"]).columns.tolist()
         if string_cols:
-            # Prefer columns with "name", "date", "product" in title
             for col in string_cols:
-                if any(x in col.lower() for x in ['name', 'date', 'product', 'month', 'category']):
+                if any(token in col.lower() for token in ["name", "date", "product", "month", "category"]):
                     label_col = col
                     break
-            # Fallback to first string col
             if not label_col:
                 label_col = string_cols[0]
 
         subset = df.head(10).copy()
-        
-        # Add identifier
         if label_col:
-            subset['name'] = subset[label_col].astype(str)
+            subset["name"] = subset[label_col].astype(str)
         else:
-            subset['name'] = subset.index.astype(str)
-            
-        chart_data = subset[['name'] + numeric_cols].to_dict(orient='records')
-        
-    return OverviewMetrics(
+            subset["name"] = subset.index.astype(str)
+
+        chart_data = subset[["name"] + numeric_cols].to_dict(orient="records")
+
+    analyst_insights = build_analyst_insights(df)
+
+    payload = OverviewMetrics(
         dataset_id=dataset.id,
         total_rows=len(df),
         total_columns=len(df.columns),
         numeric_columns=numeric_cols,
         last_updated=dataset.updated_at or datetime.now(),
         basic_stats=basic_stats,
-        chart_data=chart_data
+        chart_data=chart_data,
+        analyst_insights=analyst_insights,
     )
+
+    _cache_metrics(dataset.id, cache_key, now, payload)
+    return payload

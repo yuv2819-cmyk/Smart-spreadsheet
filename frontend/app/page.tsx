@@ -10,7 +10,7 @@ import {
     Activity
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { API_URL } from "@/lib/api-config";
+import { apiFetch } from "@/lib/api-client";
 
 interface OverviewMetrics {
     total_rows: number;
@@ -25,7 +25,7 @@ export default function Home() {
     useEffect(() => {
         const fetchMetrics = async () => {
             try {
-                const response = await fetch(`${API_URL}/overview/metrics`);
+                const response = await apiFetch("/overview/metrics");
                 if (response.ok) {
                     const data = await response.json();
                     setMetrics(data);

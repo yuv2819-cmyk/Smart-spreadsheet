@@ -1,13 +1,20 @@
 import requests
 import os
 
+API_TOKEN = os.getenv("BACKEND_API_TOKEN", "dev-insecure-token")
+HEADERS = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "X-Tenant-Id": os.getenv("BACKEND_TENANT_ID", "1"),
+    "X-User-Id": os.getenv("BACKEND_USER_ID", "1"),
+}
+
 # Upload CSV file
 url = "http://127.0.0.1:8000/datasets/upload"
 csv_path = r"c:\Users\Yuvra\OneDrive\Desktop\smart-spreadsheet\test_sales_data.csv"
 files = {"file": open(csv_path, "rb")}
 
 print("Uploading CSV file...")
-response = requests.post(url, files=files)
+response = requests.post(url, files=files, headers=HEADERS)
 
 if response.status_code == 200:
     print("✅ Upload successful!")
@@ -18,7 +25,7 @@ else:
 
 # Test 1: Get dataset data
 print("\n--- Test 1: Getting dataset data ---")
-data_response = requests.get("http://127.0.0.1:8000/datasets/latest")
+data_response = requests.get("http://127.0.0.1:8000/datasets/latest", headers=HEADERS)
 if data_response.status_code == 200:
     dataset = data_response.json()
     print(f"✅ Dataset ID: {dataset['id']}")
@@ -33,7 +40,7 @@ else:
 
 # Test 2: Get data rows
 print("\n--- Test 2: Getting data rows ---")
-rows_response = requests.get(f"http://127.0.0.1:8000/datasets/{dataset_id}/data?limit=5")
+rows_response = requests.get(f"http://127.0.0.1:8000/datasets/{dataset_id}/data?limit=5", headers=HEADERS)
 if rows_response.status_code == 200:
     data = rows_response.json()
     print(f"✅ Retrieved {len(data['data'])} rows")
@@ -43,7 +50,7 @@ else:
 
 # Test 3: Get overview metrics
 print("\n--- Test 3: Getting overview metrics ---")
-metrics_response = requests.get("http://127.0.0.1:8000/overview/metrics")
+metrics_response = requests.get("http://127.0.0.1:8000/overview/metrics", headers=HEADERS)
 if metrics_response.status_code == 200:
     metrics = metrics_response.json()
     print(f"✅ Total rows: {metrics['total_rows']}")
@@ -61,7 +68,7 @@ else:
 # Test 4: AI Summarization
 print("\n--- Test 4: Testing AI Summarization ---")
 ai_payload = {"dataset_id": dataset_id}
-ai_response = requests.post("http://127.0.0.1:8000/ai/summarize", json=ai_payload)
+ai_response = requests.post("http://127.0.0.1:8000/ai/summarize", json=ai_payload, headers=HEADERS)
 if ai_response.status_code == 200:
     summary_data = ai_response.json()
     print(f"✅ AI Summary generated!")

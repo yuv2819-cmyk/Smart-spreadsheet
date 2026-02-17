@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Send, Sparkles, User, Bot, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiFetch } from "@/lib/api-client";
 
 interface Message {
     id: string;
@@ -11,34 +12,128 @@ interface Message {
     content: string;
 }
 
+const initialAssistantMessage: Message = {
+    id: "1",
+    role: "assistant",
+    content: "Ask a question about your uploaded data and I will analyze it.",
+};
+
 export default function AIAssistant() {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: "1",
-            role: "assistant",
-            content: "Hello! I'm your data analyst. I see you're looking at Q1 Sales. Would you like me to forecast revenue for next month?",
-        },
-    ]);
+    const [messages, setMessages] = useState<Message[]>([initialAssistantMessage]);
     const [input, setInput] = useState("");
     const [isTyping, setIsTyping] = useState(false);
+    const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
 
-    const handleSend = () => {
-        if (!input.trim()) return;
+    const fetchLatestDatasetId = useCallback(async (): Promise<number | null> => {
+        try {
+            const latestRes = await apiFetch("/datasets/latest");
+            if (!latestRes.ok) return null;
+            const latest = await latestRes.json();
+            return typeof latest.id === "number" ? latest.id : null;
+        } catch {
+            return null;
+        }
+    }, []);
 
-        const userMsg: Message = { id: Date.now().toString(), role: "user", content: input };
+    const fetchSuggestedQuestions = useCallback(async () => {
+        const datasetId = await fetchLatestDatasetId();
+        if (!datasetId) {
+            setSuggestedQuestions([]);
+            return;
+        }
+        try {
+            const response = await apiFetch(`/ai/recommended-questions/${datasetId}`);
+            if (!response.ok) {
+                setSuggestedQuestions([]);
+                return;
+            }
+            const data = await response.json();
+            if (Array.isArray(data?.questions)) {
+                setSuggestedQuestions(data.questions.slice(0, 4));
+            } else {
+                setSuggestedQuestions([]);
+            }
+        } catch {
+            setSuggestedQuestions([]);
+        }
+    }, [fetchLatestDatasetId]);
+
+    useEffect(() => {
+        fetchSuggestedQuestions();
+    }, [fetchSuggestedQuestions]);
+
+    const handleSend = async (overridePrompt?: string) => {
+        if (isTyping) return;
+
+        const prompt = (overridePrompt ?? input).trim();
+        if (!prompt) return;
+
+        const userMsg: Message = { id: Date.now().toString(), role: "user", content: prompt };
         setMessages((prev) => [...prev, userMsg]);
-        setInput("");
+        if (!overridePrompt) setInput("");
         setIsTyping(true);
 
-        setTimeout(() => {
+        try {
+            const datasetId = await fetchLatestDatasetId();
+            if (!datasetId) {
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: (Date.now() + 1).toString(),
+                        role: "assistant",
+                        content: "No dataset found. Upload a CSV file first.",
+                    },
+                ]);
+                return;
+            }
+
+            const response = await apiFetch("/ai/query", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ dataset_id: datasetId, prompt }),
+            });
+
+            if (!response.ok) {
+                let detail = "AI query failed.";
+                try {
+                    const errorData = await response.json();
+                    detail = errorData.detail || detail;
+                } catch {
+                    // keep default message
+                }
+                throw new Error(detail);
+            }
+
+            const data = await response.json();
+            const generatedText = (data.generated_code || "").trim();
+            const fallbackText = data?.result_data?.generated === false ? data?.result_data?.message : "";
+            const assistantText = generatedText || fallbackText || "I could not generate an answer for this question.";
+
             const aiMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
-                content: "I've analyzed the trend. Based on the 12% growth in electronics, we can project a revenue increase of approximately $14,500 next month."
+                content: assistantText,
             };
             setMessages((prev) => [...prev, aiMsg]);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to contact AI service.";
+            setMessages((prev) => [
+                ...prev,
+                {
+                    id: (Date.now() + 1).toString(),
+                    role: "assistant",
+                    content: `Request failed: ${message}`,
+                },
+            ]);
+        } finally {
             setIsTyping(false);
-        }, 1500);
+        }
+    };
+
+    const handleResetConversation = () => {
+        if (isTyping) return;
+        setMessages([initialAssistantMessage]);
+        setInput("");
     };
 
     return (
@@ -49,13 +144,31 @@ export default function AIAssistant() {
                     <Sparkles className="w-4 h-4 text-primary" />
                     <h3 className="font-semibold text-sm">AI Analyst</h3>
                 </div>
-                <button className="text-muted-foreground hover:text-primary transition-colors">
+                <button
+                    onClick={handleResetConversation}
+                    className="text-muted-foreground hover:text-primary transition-colors"
+                    title="Reset conversation"
+                >
                     <RefreshCw className="w-3.5 h-3.5" />
                 </button>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {suggestedQuestions.length > 0 && messages.length <= 1 && (
+                    <div className="flex flex-wrap gap-2">
+                        {suggestedQuestions.map((question) => (
+                            <button
+                                key={question}
+                                onClick={() => handleSend(question)}
+                                disabled={isTyping}
+                                className="text-xs px-2.5 py-1.5 rounded-full border border-border bg-secondary/60 hover:bg-secondary transition-colors text-left"
+                            >
+                                {question}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <AnimatePresence initial={false}>
                     {messages.map((m) => (
                         <motion.div

@@ -1,6 +1,12 @@
 import requests
+import os
 
 API_URL = "http://127.0.0.1:8000"
+HEADERS = {
+    "Authorization": f"Bearer {os.getenv('BACKEND_API_TOKEN', 'dev-insecure-token')}",
+    "X-Tenant-Id": os.getenv("BACKEND_TENANT_ID", "1"),
+    "X-User-Id": os.getenv("BACKEND_USER_ID", "1"),
+}
 
 print("="*60)
 print("Testing AI Query Endpoint")
@@ -16,7 +22,7 @@ print(f"\nSending AI Query: '{test_query['prompt']}'")
 print("Waiting for OpenAI response...")
 
 try:
-    response = requests.post(f"{API_URL}/ai/query", json=test_query, timeout=30)
+    response = requests.post(f"{API_URL}/ai/query", json=test_query, headers=HEADERS, timeout=30)
     
     if response.status_code == 200:
         data = response.json()

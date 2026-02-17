@@ -10,9 +10,11 @@ out/
 .env
 .env.local
 .env.production
+backend/.env
 
 # Python
 __pycache__/
+**/__pycache__/
 *.pyc
 venv/
 
@@ -20,3 +22,6 @@ venv/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+backend/*.log
+*.log
+*.db
