@@ -36,6 +36,27 @@ function buildTargetUrl(path: string[], search: string): string {
     return `${safeBase}/${safePath}${search}`;
 }
 
+function getBackendConfigError(): string | null {
+    const baseIsDefaultLocal = BACKEND_BASE_URL === "http://127.0.0.1:8000";
+    const hasExplicitEnv = Boolean((process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || "").trim());
+    const looksLikeHttpUrl = /^https?:\/\//i.test(BACKEND_BASE_URL);
+
+    if (process.env.NODE_ENV === "production") {
+        if (!hasExplicitEnv || baseIsDefaultLocal) {
+            return "Server misconfigured: BACKEND_API_URL is not set. Add BACKEND_API_URL=https://<your-railway-domain> in Vercel and redeploy.";
+        }
+        if (!looksLikeHttpUrl) {
+            return "Server misconfigured: BACKEND_API_URL must start with http:// or https://";
+        }
+    }
+
+    if (!looksLikeHttpUrl) {
+        return `Invalid BACKEND_API_URL: ${BACKEND_BASE_URL}`;
+    }
+
+    return null;
+}
+
 function allowsAnonymous(path: string[]): boolean {
     const joined = path.join("/");
     if (!joined) return true;
@@ -45,6 +66,11 @@ function allowsAnonymous(path: string[]): boolean {
 }
 
 async function proxyRequest(req: NextRequest, path: string[]): Promise<NextResponse> {
+    const configError = getBackendConfigError();
+    if (configError) {
+        return NextResponse.json({ detail: configError }, { status: 500 });
+    }
+
     const targetUrl = buildTargetUrl(path, req.nextUrl.search);
     const headers = new Headers();
 
