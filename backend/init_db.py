@@ -1,6 +1,12 @@
 """
 Database initialization script.
-Creates initial tenant and user for MVP.
+Creates database tables and (optionally) seeds example tenant/user records.
+
+Usage:
+- Create schema only:
+  - `python init_db.py`
+- Create schema and seed example tenant/user:
+  - `set SEED_EXAMPLE=true` (Windows) then `python init_db.py`
 """
 
 import asyncio
@@ -26,6 +32,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 async def init_db() -> None:
     engine = create_async_engine(settings.database_url, echo=False)
     reset_db = _env_flag("RESET_DB", False)
+    seed_example = _env_flag("SEED_EXAMPLE", False)
 
     async with engine.begin() as conn:
         if reset_db:
@@ -34,6 +41,12 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    if not seed_example:
+        print("Database schema initialized successfully.")
+        print("Tip: set SEED_EXAMPLE=true to insert an example tenant/user for local testing.")
+        await engine.dispose()
+        return
 
     async with async_session() as session:
         tenant_result = await session.execute(
@@ -65,7 +78,7 @@ async def init_db() -> None:
         print("Database initialized successfully.")
         print(f"  Tenant: {tenant.name} (ID: {tenant.id})")
         print(f"  User: {user.email} (ID: {user.id})")
-        print(f"  Default password: {settings.default_admin_password}")
+        print("  Password: (from DEFAULT_ADMIN_PASSWORD in your environment)")
         if not reset_db:
             print("  Existing data was preserved. Set RESET_DB=true to force a full reset.")
 

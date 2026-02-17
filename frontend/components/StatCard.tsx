@@ -7,6 +7,7 @@ interface StatCardProps {
     value: string;
     trend: string;
     trendUp: boolean;
+    trendContext?: string;
     icon: LucideIcon;
     color: "blue" | "emerald" | "violet" | "rose";
 }
@@ -18,7 +19,8 @@ const colorMap = {
     rose: "from-rose-500/20 to-pink-500/20 text-rose-600 dark:text-rose-400",
 };
 
-export default function StatCard({ title, value, trend, trendUp, icon: Icon, color }: StatCardProps) {
+export default function StatCard({ title, value, trend, trendUp, trendContext, icon: Icon, color }: StatCardProps) {
+    const context = typeof trend === "string" && trend.trim() ? (trendContext ?? "vs last month") : "";
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -45,7 +47,7 @@ export default function StatCard({ title, value, trend, trendUp, icon: Icon, col
                 )}>
                     {trend}
                 </span>
-                <span className="text-muted-foreground">vs last month</span>
+                {context ? <span className="text-muted-foreground">{context}</span> : null}
             </div>
         </motion.div>
     );

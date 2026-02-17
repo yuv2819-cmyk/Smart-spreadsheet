@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./smart_spreadsheet.db"
     sql_echo: bool = False
     auto_create_schema: bool = True
-    auto_seed_mvp_records: bool = True
+    # Example seeding is opt-in. A real SaaS flow should start with signup.
+    auto_seed_mvp_records: bool = False
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
@@ -29,7 +30,8 @@ class Settings(BaseSettings):
     auth_access_token_expire_minutes: int = 60 * 24
 
     mvp_api_token: str | None = None
-    allow_dev_auth_fallback: bool = True
+    # Legacy service-token fallback is opt-in for local dev only.
+    allow_dev_auth_fallback: bool = False
 
     allowed_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
@@ -41,10 +43,11 @@ class Settings(BaseSettings):
     max_upload_size_bytes: int = 10 * 1024 * 1024
     overview_cache_ttl_seconds: int = 30
 
-    default_tenant_name: str = "Demo Company"
-    default_tenant_subdomain: str = "demo"
-    default_admin_email: str = "admin@demo.com"
-    default_admin_password: str = "admin12345"
+    # Only used when AUTO_SEED_MVP_RECORDS or init_db example seeding is enabled.
+    default_tenant_name: str = "Example Company"
+    default_tenant_subdomain: str = "workspace"
+    default_admin_email: str = "admin@example.com"
+    default_admin_password: str = "change-me"
 
     @field_validator("database_url", mode="before")
     @classmethod

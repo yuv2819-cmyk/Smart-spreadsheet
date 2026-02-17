@@ -228,6 +228,7 @@ export default function OverviewPage() {
                     trendUp={true}
                     icon={FileText}
                     color="blue"
+                    trendContext=""
                 />
                 <StatCard
                     title="Avg. Value"
@@ -236,6 +237,7 @@ export default function OverviewPage() {
                     trendUp={true}
                     icon={DollarSign}
                     color="violet"
+                    trendContext=""
                 />
                 <StatCard
                     title="Avg. Units"
@@ -244,6 +246,7 @@ export default function OverviewPage() {
                     trendUp={true}
                     icon={ShoppingCart}
                     color="rose"
+                    trendContext=""
                 />
                 <StatCard
                     title="Columns"
@@ -252,6 +255,7 @@ export default function OverviewPage() {
                     trendUp={true}
                     icon={Activity}
                     color="emerald"
+                    trendContext=""
                 />
             </div>
 

@@ -14,9 +14,9 @@ export const SETTINGS_STORAGE_KEY = "smartsheet_settings_v1";
 
 export const DEFAULT_SETTINGS: UserSettings = {
     workspace_name: "My Workspace",
-    subdomain: "demo",
-    display_name: "John Doe",
-    email: "john@example.com",
+    subdomain: "my-workspace",
+    display_name: "",
+    email: "",
     theme: "system",
     notifications_email: true,
     notifications_product: true,

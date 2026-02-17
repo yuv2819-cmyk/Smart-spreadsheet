@@ -17,6 +17,12 @@ python init_db.py
 python -m uvicorn app.main:app --reload
 ```
 
+Optional local seed:
+```bash
+set SEED_EXAMPLE=true
+python init_db.py
+```
+
 ### 2. Frontend
 ```bash
 cd frontend
