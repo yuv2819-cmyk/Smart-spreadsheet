@@ -1,0 +1,13 @@
+snapshot_date,warehouse,sku,category,stock_on_hand,reorder_point,units_sold_7d,supplier_lead_days
+2025-03-01,WH-North,SKU-1001,Laptop,42,25,18,12
+2025-03-01,WH-North,SKU-1002,Mouse,180,90,65,7
+2025-03-01,WH-South,SKU-1001,Laptop,24,25,14,12
+2025-03-01,WH-South,SKU-1003,Keyboard,130,70,52,8
+2025-03-01,WH-East,SKU-1004,Monitor,38,30,16,10
+2025-03-01,WH-East,SKU-1005,Headset,75,50,31,9
+2025-03-01,WH-West,SKU-1002,Mouse,150,90,58,7
+2025-03-01,WH-West,SKU-1004,Monitor,28,30,19,10
+2025-03-08,WH-North,SKU-1001,Laptop,36,25,21,12
+2025-03-08,WH-South,SKU-1001,Laptop,18,25,17,12
+2025-03-08,WH-East,SKU-1004,Monitor,22,30,20,10
+2025-03-08,WH-West,SKU-1005,Headset,48,50,29,9

@@ -7,6 +7,9 @@ import pandas as pd
 DATE_HINT_TOKENS = ("date", "time", "month", "year", "day")
 REVENUE_HINT_TOKENS = ("revenue", "sales", "amount", "total", "gmv", "value")
 VOLUME_HINT_TOKENS = ("quantity", "qty", "units", "orders", "count", "volume")
+COST_HINT_TOKENS = ("cost", "cogs", "expense", "spend", "ad_spend", "opex", "refund")
+PROFIT_HINT_TOKENS = ("profit", "margin", "earnings", "net_income")
+SEGMENT_HINT_TOKENS = ("region", "product", "category", "channel", "segment", "plan", "team")
 
 
 def _clean_label(value: Any) -> str:
@@ -50,15 +53,37 @@ def _detect_date_columns(df: pd.DataFrame) -> tuple[list[str], dict[str, pd.Seri
     return date_columns, parsed_by_column
 
 
+def _find_column_by_tokens(
+    columns: list[str],
+    tokens: tuple[str, ...],
+    *,
+    exclude: set[str] | None = None,
+) -> str | None:
+    exclude = exclude or set()
+    lowered = {column: column.lower() for column in columns if column not in exclude}
+    for token in tokens:
+        for original, value in lowered.items():
+            if token in value:
+                return original
+    return None
+
+
+def _pick_primary_date_column(date_columns: list[str]) -> str | None:
+    if not date_columns:
+        return None
+    for column in date_columns:
+        if any(token in column.lower() for token in DATE_HINT_TOKENS):
+            return column
+    return date_columns[0]
+
+
 def _find_best_metric_column(columns: list[str], numeric_columns: list[str]) -> str | None:
     if not numeric_columns:
         return None
 
-    lower_columns = {col: col.lower() for col in numeric_columns}
-    for token in REVENUE_HINT_TOKENS:
-        for original, lowered in lower_columns.items():
-            if token in lowered:
-                return original
+    revenue_column = _find_column_by_tokens(numeric_columns, REVENUE_HINT_TOKENS)
+    if revenue_column:
+        return revenue_column
     return numeric_columns[0]
 
 
@@ -332,14 +357,285 @@ def _build_kpis(df: pd.DataFrame, numeric_columns: list[str]) -> dict[str, Any]:
     return kpis
 
 
+def _build_business_summary(
+    *,
+    revenue_column: str | None,
+    cost_column: str | None,
+    profit_column: str | None,
+    revenue_series: pd.Series | None,
+    cost_series: pd.Series | None,
+    profit_series: pd.Series | None,
+) -> dict[str, Any]:
+    total_revenue = float(revenue_series.dropna().sum()) if revenue_series is not None else None
+    total_cost = float(cost_series.dropna().sum()) if cost_series is not None else None
+    total_profit = float(profit_series.dropna().sum()) if profit_series is not None else None
+
+    profit_margin_pct: float | None = None
+    if total_profit is not None and total_revenue is not None and total_revenue != 0:
+        profit_margin_pct = round((total_profit / total_revenue) * 100, 2)
+
+    profit_rows = int((profit_series.dropna() > 0).sum()) if profit_series is not None else None
+    loss_rows = int((profit_series.dropna() < 0).sum()) if profit_series is not None else None
+    neutral_rows = int((profit_series.dropna() == 0).sum()) if profit_series is not None else None
+
+    profit_available = profit_series is not None
+
+    message = None
+    if not revenue_column:
+        message = "Revenue column not detected. Add columns like 'revenue' or 'sales' for business insights."
+    elif not profit_available:
+        message = (
+            "Revenue was detected, but profit/loss cannot be calculated without cost or profit columns. "
+            "Add columns like 'cost', 'cogs', or 'profit'."
+        )
+    elif total_profit is not None and total_profit < 0:
+        message = "Overall performance is at a net loss for the analyzed period."
+
+    return {
+        "profit_available": profit_available,
+        "revenue_column": revenue_column,
+        "cost_column": cost_column,
+        "profit_column": profit_column,
+        "total_revenue": total_revenue,
+        "total_cost": total_cost,
+        "total_profit": total_profit,
+        "profit_margin_pct": profit_margin_pct,
+        "profit_rows": profit_rows,
+        "loss_rows": loss_rows,
+        "neutral_rows": neutral_rows,
+        "message": message,
+    }
+
+
+def _build_profit_loss_breakdown(
+    *,
+    df: pd.DataFrame,
+    categorical_columns: list[str],
+    revenue_series: pd.Series | None,
+    cost_series: pd.Series | None,
+    profit_series: pd.Series | None,
+) -> dict[str, Any]:
+    if profit_series is None:
+        return {
+            "segment_column": None,
+            "rows": [],
+            "top_profit_segments": [],
+            "top_loss_segments": [],
+            "message": "Profit/loss breakdown is unavailable because profit could not be computed.",
+        }
+
+    segment_column = _find_column_by_tokens(categorical_columns, SEGMENT_HINT_TOKENS)
+    if not segment_column and categorical_columns:
+        segment_column = categorical_columns[0]
+
+    if not segment_column:
+        return {
+            "segment_column": None,
+            "rows": [],
+            "top_profit_segments": [],
+            "top_loss_segments": [],
+            "message": "No categorical column was found for segment-wise profit/loss breakdown.",
+        }
+
+    base = pd.DataFrame({"segment": df[segment_column].map(_clean_label), "profit": profit_series})
+    if revenue_series is not None:
+        base["revenue"] = revenue_series
+    if cost_series is not None:
+        base["cost"] = cost_series
+
+    agg_spec: dict[str, str] = {"profit": "sum"}
+    if "revenue" in base.columns:
+        agg_spec["revenue"] = "sum"
+    if "cost" in base.columns:
+        agg_spec["cost"] = "sum"
+
+    grouped = (
+        base.dropna(subset=["profit"])
+        .groupby("segment")
+        .agg(agg_spec)
+        .sort_values("profit", ascending=True)
+    )
+
+    if grouped.empty:
+        return {
+            "segment_column": segment_column,
+            "rows": [],
+            "top_profit_segments": [],
+            "top_loss_segments": [],
+            "message": "No valid rows were available for profit/loss segment analysis.",
+        }
+
+    rows: list[dict[str, Any]] = []
+    for segment, row in grouped.head(30).iterrows():
+        revenue_value = float(row["revenue"]) if "revenue" in grouped.columns and pd.notna(row["revenue"]) else None
+        cost_value = float(row["cost"]) if "cost" in grouped.columns and pd.notna(row["cost"]) else None
+        profit_value = float(row["profit"]) if pd.notna(row["profit"]) else 0.0
+        margin_pct = None
+        if revenue_value not in (None, 0):
+            margin_pct = round((profit_value / revenue_value) * 100, 2)
+
+        rows.append(
+            {
+                "segment": str(segment),
+                "revenue": revenue_value,
+                "cost": cost_value,
+                "profit": profit_value,
+                "margin_pct": margin_pct,
+                "status": "loss" if profit_value < 0 else "profit",
+            }
+        )
+
+    top_profit_segments = [
+        {
+            "segment": str(segment),
+            "profit": float(row["profit"]),
+        }
+        for segment, row in grouped.sort_values("profit", ascending=False).head(3).iterrows()
+        if float(row["profit"]) > 0
+    ]
+    top_loss_segments = [
+        {
+            "segment": str(segment),
+            "profit": float(row["profit"]),
+        }
+        for segment, row in grouped.sort_values("profit", ascending=True).head(3).iterrows()
+        if float(row["profit"]) < 0
+    ]
+
+    return {
+        "segment_column": segment_column,
+        "rows": rows,
+        "top_profit_segments": top_profit_segments,
+        "top_loss_segments": top_loss_segments,
+        "message": None,
+    }
+
+
+def _build_simplified_trend(
+    *,
+    df: pd.DataFrame,
+    date_columns: list[str],
+    parsed_dates: dict[str, pd.Series],
+    revenue_series: pd.Series | None,
+    cost_series: pd.Series | None,
+    profit_series: pd.Series | None,
+) -> dict[str, Any] | None:
+    primary_date_column = _pick_primary_date_column(date_columns)
+    if not primary_date_column:
+        return None
+
+    date_series = parsed_dates.get(primary_date_column)
+    if date_series is None:
+        return None
+
+    trend_df = pd.DataFrame({"date": date_series})
+    if revenue_series is not None:
+        trend_df["revenue"] = revenue_series
+    if cost_series is not None:
+        trend_df["cost"] = cost_series
+    if profit_series is not None:
+        trend_df["profit"] = profit_series
+
+    numeric_cols = [col for col in ("revenue", "cost", "profit") if col in trend_df.columns]
+    if not numeric_cols:
+        return None
+
+    trend_df = trend_df.dropna(subset=["date"])
+    if trend_df.empty:
+        return None
+
+    trend_df["period"] = trend_df["date"].dt.to_period("M").astype(str)
+    grouped = trend_df.groupby("period")[numeric_cols].sum().sort_index()
+    if grouped.empty:
+        return None
+
+    recent = grouped.tail(12)
+    points: list[dict[str, Any]] = []
+    for period, row in recent.iterrows():
+        point: dict[str, Any] = {"period": str(period)}
+        for column in numeric_cols:
+            value = row[column]
+            point[column] = float(value) if pd.notna(value) else None
+        points.append(point)
+
+    growth_metric = "profit" if "profit" in recent.columns else "revenue" if "revenue" in recent.columns else None
+    growth_pct: float | None = None
+    if growth_metric and recent.shape[0] >= 2:
+        latest = float(recent[growth_metric].iloc[-1])
+        previous = float(recent[growth_metric].iloc[-2])
+        if previous != 0:
+            growth_pct = round(((latest - previous) / abs(previous)) * 100, 2)
+
+    return {
+        "date_column": primary_date_column,
+        "growth_metric": growth_metric,
+        "growth_pct": growth_pct,
+        "points": points,
+    }
+
+
+def _build_chart_explanations(
+    *,
+    business_summary: dict[str, Any],
+    simplified_trend: dict[str, Any] | None,
+    profit_loss_breakdown: dict[str, Any],
+) -> list[str]:
+    lines: list[str] = []
+
+    profit_available = bool(business_summary.get("profit_available"))
+    total_profit = business_summary.get("total_profit")
+    profit_margin_pct = business_summary.get("profit_margin_pct")
+
+    if not profit_available:
+        lines.append(
+            "Use simple mode with Revenue + Cost + Profit once you add cost/profit columns to the dataset."
+        )
+    elif isinstance(total_profit, (int, float)):
+        status = "profit" if total_profit >= 0 else "loss"
+        lines.append(f"Overall business is in {status} at {total_profit:,.2f} total profit.")
+
+    if isinstance(profit_margin_pct, (int, float)):
+        lines.append(f"Current profit margin is {profit_margin_pct:.2f}%.")
+
+    if simplified_trend and isinstance(simplified_trend.get("growth_pct"), (int, float)):
+        growth = float(simplified_trend["growth_pct"])
+        metric = simplified_trend.get("growth_metric") or "metric"
+        direction = "up" if growth >= 0 else "down"
+        lines.append(f"{metric.title()} trend is {direction} by {abs(growth):.2f}% in the latest month.")
+
+    top_losses = profit_loss_breakdown.get("top_loss_segments", [])
+    if top_losses:
+        first = top_losses[0]
+        lines.append(
+            f"Biggest loss segment is '{first['segment']}' at {float(first['profit']):,.2f} profit contribution."
+        )
+
+    if not lines:
+        lines.append("Use Simple Chart Mode to focus on one KPI trend at a time.")
+
+    return lines[:4]
+
+
 def _build_recommendations(
     data_quality: dict[str, Any],
     numeric_profiles: list[dict[str, Any]],
     correlations: list[dict[str, Any]],
     segments: list[dict[str, Any]],
     trend: dict[str, Any] | None,
+    business_summary: dict[str, Any],
 ) -> list[str]:
     recommendations: list[str] = []
+
+    if not business_summary.get("profit_available"):
+        recommendations.append(
+            "Add cost/COGS/profit columns to unlock complete profit-and-loss analytics."
+        )
+    else:
+        total_profit = business_summary.get("total_profit")
+        if isinstance(total_profit, (int, float)) and total_profit < 0:
+            recommendations.append(
+                f"Investigate drivers of net loss ({total_profit:,.2f}) and reduce high-cost segments first."
+            )
 
     if data_quality.get("high_missing_columns"):
         top_missing = data_quality["high_missing_columns"][0]
@@ -404,6 +700,7 @@ def _build_executive_summary(
     data_quality: dict[str, Any],
     trend: dict[str, Any] | None,
     segments: list[dict[str, Any]],
+    business_summary: dict[str, Any],
 ) -> str:
     row_count = int(len(df))
     col_count = int(len(df.columns))
@@ -414,6 +711,16 @@ def _build_executive_summary(
         f"({len(numeric_columns)} numeric, {len(categorical_columns)} categorical).",
         f"Overall completeness is {completeness:.2f}%.",
     ]
+
+    if business_summary.get("profit_available"):
+        total_profit = business_summary.get("total_profit")
+        profit_margin_pct = business_summary.get("profit_margin_pct")
+        if isinstance(total_profit, (int, float)):
+            parts.append(f"Estimated total profit is {total_profit:,.2f}.")
+        if isinstance(profit_margin_pct, (int, float)):
+            parts.append(f"Profit margin is {profit_margin_pct:.2f}%.")
+    elif business_summary.get("message"):
+        parts.append(str(business_summary["message"]))
 
     if trend and trend.get("growth_pct") is not None:
         growth = float(trend["growth_pct"])
@@ -455,6 +762,29 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
             "segments": [],
             "trend": None,
             "kpis": {},
+            "business_summary": {
+                "profit_available": False,
+                "revenue_column": None,
+                "cost_column": None,
+                "profit_column": None,
+                "total_revenue": None,
+                "total_cost": None,
+                "total_profit": None,
+                "profit_margin_pct": None,
+                "profit_rows": None,
+                "loss_rows": None,
+                "neutral_rows": None,
+                "message": "Upload data to calculate business performance.",
+            },
+            "profit_loss_breakdown": {
+                "segment_column": None,
+                "rows": [],
+                "top_profit_segments": [],
+                "top_loss_segments": [],
+                "message": "No data available for profit/loss breakdown.",
+            },
+            "simplified_trend": None,
+            "chart_explanations": ["Upload data to enable simplified chart explanations."],
         }
 
     numeric_columns = df.select_dtypes(include=["number"]).columns.tolist()
@@ -462,6 +792,29 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
     categorical_columns = [
         column for column in df.columns if column not in numeric_columns and column not in date_columns
     ]
+
+    revenue_column = _find_column_by_tokens(numeric_columns, REVENUE_HINT_TOKENS)
+    cost_column = _find_column_by_tokens(
+        numeric_columns,
+        COST_HINT_TOKENS,
+        exclude={revenue_column} if revenue_column else set(),
+    )
+    profit_column = _find_column_by_tokens(
+        numeric_columns,
+        PROFIT_HINT_TOKENS,
+        exclude={column for column in [revenue_column, cost_column] if column},
+    )
+
+    revenue_series = (
+        pd.to_numeric(df[revenue_column], errors="coerce") if revenue_column and revenue_column in df.columns else None
+    )
+    cost_series = pd.to_numeric(df[cost_column], errors="coerce") if cost_column and cost_column in df.columns else None
+    if profit_column and profit_column in df.columns:
+        profit_series = pd.to_numeric(df[profit_column], errors="coerce")
+    elif revenue_series is not None and cost_series is not None:
+        profit_series = revenue_series - cost_series
+    else:
+        profit_series = None
 
     metric_column = _find_best_metric_column(list(df.columns), numeric_columns)
     data_quality = _build_data_quality(df)
@@ -471,7 +824,42 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
     segments = _build_segment_insights(df, categorical_columns, metric_column)
     trend = _build_trend_insight(df, date_columns, parsed_dates, metric_column)
     kpis = _build_kpis(df, numeric_columns)
-    recommendations = _build_recommendations(data_quality, numeric_profiles, correlations, segments, trend)
+    business_summary = _build_business_summary(
+        revenue_column=revenue_column,
+        cost_column=cost_column,
+        profit_column=profit_column,
+        revenue_series=revenue_series,
+        cost_series=cost_series,
+        profit_series=profit_series,
+    )
+    profit_loss_breakdown = _build_profit_loss_breakdown(
+        df=df,
+        categorical_columns=categorical_columns,
+        revenue_series=revenue_series,
+        cost_series=cost_series,
+        profit_series=profit_series,
+    )
+    simplified_trend = _build_simplified_trend(
+        df=df,
+        date_columns=date_columns,
+        parsed_dates=parsed_dates,
+        revenue_series=revenue_series,
+        cost_series=cost_series,
+        profit_series=profit_series,
+    )
+    chart_explanations = _build_chart_explanations(
+        business_summary=business_summary,
+        simplified_trend=simplified_trend,
+        profit_loss_breakdown=profit_loss_breakdown,
+    )
+    recommendations = _build_recommendations(
+        data_quality,
+        numeric_profiles,
+        correlations,
+        segments,
+        trend,
+        business_summary,
+    )
     executive_summary = _build_executive_summary(
         df=df,
         numeric_columns=numeric_columns,
@@ -479,6 +867,7 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         data_quality=data_quality,
         trend=trend,
         segments=segments,
+        business_summary=business_summary,
     )
 
     return {
@@ -491,4 +880,8 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         "segments": segments,
         "trend": trend,
         "kpis": kpis,
+        "business_summary": business_summary,
+        "profit_loss_breakdown": profit_loss_breakdown,
+        "simplified_trend": simplified_trend,
+        "chart_explanations": chart_explanations,
     }

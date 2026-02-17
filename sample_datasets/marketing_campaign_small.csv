@@ -1,0 +1,13 @@
+date,campaign,channel,spend,impressions,clicks,leads,conversions
+2025-01-05,Winter Push,Google Ads,1200,54000,1720,124,28
+2025-01-12,Winter Push,Meta Ads,900,48000,1330,96,21
+2025-01-19,Retention Email,Email,260,18000,880,74,19
+2025-01-26,Referral Boost,Partners,450,9500,410,38,14
+2025-02-02,Spring Launch,Google Ads,1450,62000,2015,149,36
+2025-02-09,Spring Launch,Meta Ads,980,52000,1475,107,24
+2025-02-16,Feature Promo,LinkedIn,620,21000,560,41,9
+2025-02-23,Webinar Promo,Email,310,19500,990,82,27
+2025-03-02,Webinar Promo,Google Ads,710,30000,1110,88,23
+2025-03-09,Trial Drive,Meta Ads,860,47000,1390,102,22
+2025-03-16,Trial Drive,YouTube,1040,68000,1260,,20
+2025-03-23,Upsell Nudge,Email,290,17000,760,67,18

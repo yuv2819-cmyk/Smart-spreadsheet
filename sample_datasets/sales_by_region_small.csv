@@ -1,0 +1,15 @@
+order_date,region,product,channel,revenue,quantity,discount_pct
+2025-01-03,North,Laptop,Online,1250,3,5
+2025-01-07,South,Mouse,Retail,220,12,10
+2025-01-10,East,Keyboard,Online,340,8,0
+2025-01-14,West,Monitor,Retail,780,4,15
+2025-01-18,North,Laptop,Retail,1320,3,8
+2025-01-22,South,Headset,Online,410,6,5
+2025-01-26,East,Mouse,Online,190,10,0
+2025-02-02,West,Laptop,Online,9800,14,12
+2025-02-06,North,Keyboard,Retail,360,9,0
+2025-02-11,South,Monitor,Online,820,4,7
+2025-02-15,East,Headset,Retail,395,5,5
+2025-02-20,West,Mouse,Online,205,11,0
+2025-02-20,West,Mouse,Online,205,11,0
+2025-02-24,North,Monitor,Online,800,4,

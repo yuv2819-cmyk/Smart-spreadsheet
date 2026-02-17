@@ -336,4 +336,8 @@ async def recommended_questions(
             f"How can we improve performance in low-performing '{first_segment['segment_column']}' segments?"
         )
 
+    business_summary = insights.get("business_summary", {})
+    if business_summary.get("profit_available"):
+        questions.append("Which segments are driving losses, and what actions can recover margin fastest?")
+
     return {"dataset_id": dataset_id, "questions": questions[:8]}

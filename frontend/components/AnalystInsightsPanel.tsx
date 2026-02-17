@@ -54,6 +54,45 @@ interface TrendInsight {
     points: TrendPoint[];
 }
 
+interface BusinessSummary {
+    profit_available: boolean;
+    revenue_column: string | null;
+    cost_column: string | null;
+    profit_column: string | null;
+    total_revenue: number | null;
+    total_cost: number | null;
+    total_profit: number | null;
+    profit_margin_pct: number | null;
+    profit_rows: number | null;
+    loss_rows: number | null;
+    neutral_rows: number | null;
+    message: string | null;
+}
+
+interface ProfitLossBreakdownRow {
+    segment: string;
+    revenue: number | null;
+    cost: number | null;
+    profit: number;
+    margin_pct: number | null;
+    status: "profit" | "loss";
+}
+
+interface ProfitLossBreakdown {
+    segment_column: string | null;
+    rows: ProfitLossBreakdownRow[];
+    top_profit_segments: Array<{ segment: string; profit: number }>;
+    top_loss_segments: Array<{ segment: string; profit: number }>;
+    message: string | null;
+}
+
+interface SimplifiedTrend {
+    date_column: string;
+    growth_metric: string | null;
+    growth_pct: number | null;
+    points: Array<Record<string, string | number | null>>;
+}
+
 export interface AnalystInsights {
     executive_summary: string;
     recommendations: string[];
@@ -61,6 +100,10 @@ export interface AnalystInsights {
     top_correlations: CorrelationInsight[];
     segments: SegmentInsight[];
     trend: TrendInsight | null;
+    business_summary?: BusinessSummary;
+    profit_loss_breakdown?: ProfitLossBreakdown;
+    simplified_trend?: SimplifiedTrend | null;
+    chart_explanations?: string[];
 }
 
 interface AnalystInsightsPanelProps {
@@ -80,6 +123,7 @@ export default function AnalystInsightsPanel({ insights }: AnalystInsightsPanelP
     const topCorrelation = insights.top_correlations?.[0];
     const topSegment = insights.segments?.[0];
     const topMissing = insights.data_quality?.high_missing_columns?.[0];
+    const businessSummary = insights.business_summary;
 
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -89,6 +133,9 @@ export default function AnalystInsightsPanel({ insights }: AnalystInsightsPanelP
                     Analyst Summary
                 </h3>
                 <p className="text-sm leading-relaxed mb-4">{insights.executive_summary}</p>
+                {businessSummary?.message && (
+                    <p className="text-xs text-primary mb-3">{businessSummary.message}</p>
+                )}
                 <div className="space-y-2">
                     {insights.recommendations.slice(0, 5).map((item, index) => (
                         <div key={`${item}-${index}`} className="flex items-start gap-2 text-sm">

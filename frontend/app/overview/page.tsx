@@ -33,11 +33,53 @@ interface AISummary {
     key_insights: string[];
 }
 
+interface BusinessSummary {
+    profit_available: boolean;
+    revenue_column: string | null;
+    cost_column: string | null;
+    profit_column: string | null;
+    total_revenue: number | null;
+    total_cost: number | null;
+    total_profit: number | null;
+    profit_margin_pct: number | null;
+    profit_rows: number | null;
+    loss_rows: number | null;
+    neutral_rows: number | null;
+    message: string | null;
+}
+
+interface ProfitLossBreakdownRow {
+    segment: string;
+    revenue: number | null;
+    cost: number | null;
+    profit: number;
+    margin_pct: number | null;
+    status: "profit" | "loss";
+}
+
+interface ProfitLossBreakdown {
+    segment_column: string | null;
+    rows: ProfitLossBreakdownRow[];
+    top_profit_segments: Array<{ segment: string; profit: number }>;
+    top_loss_segments: Array<{ segment: string; profit: number }>;
+    message: string | null;
+}
+
+function formatCurrency(value: number | null | undefined): string {
+    if (value === null || value === undefined || !Number.isFinite(value)) return "N/A";
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+    }).format(value);
+}
+
 export default function OverviewPage() {
     const [metrics, setMetrics] = useState<OverviewMetrics | null>(null);
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState<AISummary | null>(null);
     const [isSummarizing, setIsSummarizing] = useState(false);
+    const [showProfitLoss, setShowProfitLoss] = useState(false);
 
     const fetchMetrics = async () => {
         try {
@@ -62,6 +104,7 @@ export default function OverviewPage() {
     const handleUploadSuccess = () => {
         setLoading(true);
         setSummary(null); // Clear old summary
+        setShowProfitLoss(false);
         fetchMetrics();
     };
 
@@ -106,6 +149,9 @@ export default function OverviewPage() {
     // Fallback values
     const revenueVal = revCol && metrics?.basic_stats[revCol] ? `$${metrics.basic_stats[revCol].avg.toFixed(0)}` : "N/A";
     const ordersVal = orderCol && metrics?.basic_stats[orderCol] ? Math.round(metrics.basic_stats[orderCol].avg).toString() : "N/A";
+    const businessSummary = (metrics?.analyst_insights?.business_summary || null) as BusinessSummary | null;
+    const profitLossBreakdown = (metrics?.analyst_insights?.profit_loss_breakdown || null) as ProfitLossBreakdown | null;
+    const hasProfitLossRows = !!profitLossBreakdown?.rows?.length;
 
     return (
         <div className="flex flex-col gap-6 h-full animate-in fade-in zoom-in-95 duration-500">
@@ -143,6 +189,14 @@ export default function OverviewPage() {
                         {isSummarizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                         Summarize
                     </button>
+                    {hasProfitLossRows && (
+                        <button
+                            onClick={() => setShowProfitLoss((prev) => !prev)}
+                            className="px-4 py-2 rounded-lg text-sm font-medium border border-border bg-secondary/60 hover:bg-secondary transition-colors shadow-sm"
+                        >
+                            {showProfitLoss ? "Hide Profit/Loss" : "Show Profit/Loss"}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -168,6 +222,59 @@ export default function OverviewPage() {
             {/* Analyst Insight Panels */}
             {!!metrics?.analyst_insights && metrics.total_rows > 0 && (
                 <AnalystInsightsPanel insights={metrics.analyst_insights} />
+            )}
+
+            {/* Business Summary */}
+            {businessSummary && (
+                <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-lg">Business Summary</h3>
+                        {!businessSummary.profit_available && businessSummary.message && (
+                            <span className="text-xs text-amber-600 dark:text-amber-400">
+                                {businessSummary.message}
+                            </span>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                            <p className="text-xs text-muted-foreground mb-1">Revenue</p>
+                            <p className="text-xl font-semibold">{formatCurrency(businessSummary.total_revenue)}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {businessSummary.revenue_column ? `from ${businessSummary.revenue_column}` : "Column not detected"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                            <p className="text-xs text-muted-foreground mb-1">Cost</p>
+                            <p className="text-xl font-semibold">{formatCurrency(businessSummary.total_cost)}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {businessSummary.cost_column ? `from ${businessSummary.cost_column}` : "Column not detected"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                            <p className="text-xs text-muted-foreground mb-1">Profit / Loss</p>
+                            <p
+                                className={`text-xl font-semibold ${businessSummary.total_profit !== null && businessSummary.total_profit < 0
+                                        ? "text-rose-600 dark:text-rose-400"
+                                        : "text-emerald-600 dark:text-emerald-400"
+                                    }`}
+                            >
+                                {formatCurrency(businessSummary.total_profit)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {businessSummary.profit_available ? "computed from data" : "requires cost/profit column"}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+                            <p className="text-xs text-muted-foreground mb-1">Profit Margin</p>
+                            <p className="text-xl font-semibold">
+                                {businessSummary.profit_margin_pct === null ? "N/A" : `${businessSummary.profit_margin_pct.toFixed(2)}%`}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {businessSummary.loss_rows ?? 0} loss rows / {businessSummary.profit_rows ?? 0} profit rows
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Stats Grid */}
@@ -206,13 +313,63 @@ export default function OverviewPage() {
                 />
             </div>
 
-            {/* Charts Section */}
-            {metrics?.chart_data && metrics.chart_data.length > 0 && (
-                <OverviewCharts
-                    data={metrics.chart_data}
-                    numericColumns={metrics.numeric_columns}
-                />
+            {/* Profit/Loss Breakdown */}
+            {showProfitLoss && profitLossBreakdown && (
+                <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-sm">
+                    <h3 className="font-semibold mb-4">
+                        Profit/Loss Breakdown
+                        {profitLossBreakdown.segment_column ? ` by ${profitLossBreakdown.segment_column}` : ""}
+                    </h3>
+                    {profitLossBreakdown.rows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            {profitLossBreakdown.message || "No profit/loss rows available."}
+                        </p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="text-xs uppercase text-muted-foreground border-b border-border/60">
+                                    <tr>
+                                        <th className="text-left py-2 pr-4">Segment</th>
+                                        <th className="text-right py-2 pr-4">Revenue</th>
+                                        <th className="text-right py-2 pr-4">Cost</th>
+                                        <th className="text-right py-2 pr-4">Profit/Loss</th>
+                                        <th className="text-right py-2">Margin %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {profitLossBreakdown.rows.map((row) => (
+                                        <tr key={row.segment} className="border-b border-border/30">
+                                            <td className="py-2 pr-4">{row.segment}</td>
+                                            <td className="py-2 pr-4 text-right">{formatCurrency(row.revenue)}</td>
+                                            <td className="py-2 pr-4 text-right">{formatCurrency(row.cost)}</td>
+                                            <td
+                                                className={`py-2 pr-4 text-right font-medium ${row.profit < 0
+                                                        ? "text-rose-600 dark:text-rose-400"
+                                                        : "text-emerald-600 dark:text-emerald-400"
+                                                    }`}
+                                            >
+                                                {formatCurrency(row.profit)}
+                                            </td>
+                                            <td className="py-2 text-right">
+                                                {row.margin_pct === null ? "N/A" : `${row.margin_pct.toFixed(2)}%`}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             )}
+
+            {/* Charts Section */}
+            {(metrics?.chart_data?.length || metrics?.analyst_insights?.simplified_trend?.points?.length) ? (
+                <OverviewCharts
+                    data={metrics.chart_data || []}
+                    numericColumns={metrics.numeric_columns}
+                    insights={metrics.analyst_insights}
+                />
+            ) : null}
 
             {/* Additional Overview Content */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
