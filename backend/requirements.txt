@@ -12,3 +12,5 @@ python-multipart
 tenacity
 email-validator
 aiosqlite
+python-jose[cryptography]
+passlib

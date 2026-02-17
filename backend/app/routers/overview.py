@@ -66,6 +66,7 @@ async def get_overview_metrics(
                     "duplicate_pct": 0.0,
                     "completeness_pct": 0.0,
                     "high_missing_columns": [],
+                    "inconsistent_categories": [],
                 },
                 "numeric_profiles": [],
                 "categorical_profiles": [],
@@ -96,6 +97,11 @@ async def get_overview_metrics(
                 },
                 "simplified_trend": None,
                 "chart_explanations": ["Upload data to enable simplified chart explanations."],
+                "key_drivers": {
+                    "positive_drivers": [],
+                    "negative_drivers": [],
+                },
+                "alerts": [],
             },
         )
 
@@ -132,6 +138,7 @@ async def get_overview_metrics(
                     "duplicate_pct": 0.0,
                     "completeness_pct": 0.0,
                     "high_missing_columns": [],
+                    "inconsistent_categories": [],
                 },
                 "numeric_profiles": [],
                 "categorical_profiles": [],
@@ -162,6 +169,11 @@ async def get_overview_metrics(
                 },
                 "simplified_trend": None,
                 "chart_explanations": ["Upload data to enable simplified chart explanations."],
+                "key_drivers": {
+                    "positive_drivers": [],
+                    "negative_drivers": [],
+                },
+                "alerts": [],
             },
         )
         _cache_metrics(dataset.id, cache_key, now, payload)

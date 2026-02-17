@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models import AIQuery, DataRow, Dataset
 from app.rate_limit import rate_limit
 from app.schemas import AIQueryRequest, AIQueryResponse, AISummaryRequest, AISummaryResponse
-from app.services.analytics_service import build_analyst_insights
+from app.services.analytics_service import build_analyst_insights, build_nlq_insight
 
 router = APIRouter(prefix="/ai", tags=["AI Assistant"])
 settings = get_settings()
@@ -105,6 +105,7 @@ async def generate_ai_query(
     analysis_rows = [row.row_data for row in analysis_result.scalars().all()]
     analysis_df = pd.DataFrame(analysis_rows)
     analyst_insights = build_analyst_insights(analysis_df)
+    nlq_insight = build_nlq_insight(analysis_df, request.prompt, analyst_insights)
 
     if client is None:
         generated_code, result_data = _build_fallback_response(
@@ -113,6 +114,8 @@ async def generate_ai_query(
             "missing_or_placeholder_api_key",
             analyst_insights=analyst_insights,
         )
+        result_data["nlq"] = nlq_insight
+        generated_code = nlq_insight.get("answer") or generated_code
     else:
         try:
             llm_context = {
@@ -152,7 +155,12 @@ async def generate_ai_query(
                 max_tokens=700,
             )
             generated_code = response.choices[0].message.content or "No response returned from model."
-            result_data = {"generated": True, "analyst_insights": analyst_insights}
+            result_data = {"generated": True, "analyst_insights": analyst_insights, "nlq": nlq_insight}
+            if nlq_insight.get("answer"):
+                generated_code = (
+                    f"{nlq_insight['answer']}\n\n"
+                    f"{generated_code}"
+                )
         except Exception as exc:
             generated_code, result_data = _build_fallback_response(
                 request.prompt,
@@ -160,6 +168,8 @@ async def generate_ai_query(
                 f"openai_error: {str(exc)}",
                 analyst_insights=analyst_insights,
             )
+            result_data["nlq"] = nlq_insight
+            generated_code = nlq_insight.get("answer") or generated_code
 
     execution_time = int((time.time() - start_time) * 1000)
 
@@ -339,5 +349,6 @@ async def recommended_questions(
     business_summary = insights.get("business_summary", {})
     if business_summary.get("profit_available"):
         questions.append("Which segments are driving losses, and what actions can recover margin fastest?")
+        questions.append("Why did profit drop in March, and which segments caused the decline?")
 
     return {"dataset_id": dataset_id, "questions": questions[:8]}

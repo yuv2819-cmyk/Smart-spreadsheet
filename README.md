@@ -34,13 +34,15 @@ Use `backend/.env.example` as the baseline.
 Required for production:
 - `ENVIRONMENT=production`
 - `DATABASE_URL=postgresql+asyncpg://...`
-- `MVP_API_TOKEN=<strong-random-token>`
+- `AUTH_JWT_SECRET=<long-random-secret>`
 - `ALLOWED_ORIGINS=https://your-frontend-domain`
 - `TRUSTED_HOSTS=your-frontend-domain`
 
 Common:
 - `OPENAI_API_KEY=...`
 - `OPENAI_MODEL=gpt-4o-mini`
+- `AUTH_JWT_SECRET=<long-random-secret>`
+- `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=1440`
 - `MAX_UPLOAD_SIZE_BYTES=10485760`
 - `OVERVIEW_CACHE_TTL_SECONDS=30`
 
@@ -50,7 +52,7 @@ Browser-side:
 
 Server-side (used by Next.js proxy route):
 - `BACKEND_API_URL=http://127.0.0.1:8000` (local) or your backend URL
-- `BACKEND_API_TOKEN=<same-as-MVP_API_TOKEN>`
+- `BACKEND_API_TOKEN=<optional-fallback-service-token>`
 - `BACKEND_TENANT_ID=1`
 - `BACKEND_USER_ID=1`
 
@@ -59,11 +61,16 @@ Server-side (used by Next.js proxy route):
 - Frontend now proxies API requests through `frontend/app/api/backend/[...path]/route.ts`, so backend auth token is not exposed to browsers.
 - Backend enforces production config validation:
   - no SQLite in production
-  - requires `MVP_API_TOKEN`
+  - requires `AUTH_JWT_SECRET`
   - requires `ALLOWED_ORIGINS`
   - requires non-default `TRUSTED_HOSTS`
 - Backend includes trusted host middleware, security headers, gzip, request IDs, and readiness probe (`/ready`).
 - Upload and AI routes are rate-limited.
+- Built-in JWT auth endpoints:
+  - `POST /auth/signup`
+  - `POST /auth/signin`
+  - `GET /auth/me`
+  - `POST /auth/logout`
 
 ## Docker
 

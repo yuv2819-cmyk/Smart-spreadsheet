@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
 
+    auth_jwt_secret: str | None = None
+    auth_access_token_expire_minutes: int = 60 * 24
+
     mvp_api_token: str | None = None
     allow_dev_auth_fallback: bool = True
 
@@ -38,6 +41,7 @@ class Settings(BaseSettings):
     default_tenant_name: str = "Demo Company"
     default_tenant_subdomain: str = "demo"
     default_admin_email: str = "admin@demo.com"
+    default_admin_password: str = "admin12345"
 
     @field_validator("allowed_origins", "trusted_hosts", mode="before")
     @classmethod
@@ -53,10 +57,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_for_environment(self) -> "Settings":
         if self.environment == "production":
-            if not self.mvp_api_token:
-                raise ValueError("MVP_API_TOKEN is required in production.")
-            if self.mvp_api_token == "dev-insecure-token":
+            if self.mvp_api_token and self.mvp_api_token == "dev-insecure-token":
                 raise ValueError("MVP_API_TOKEN cannot use the development fallback in production.")
+            if not self.auth_jwt_secret:
+                raise ValueError("AUTH_JWT_SECRET is required in production.")
+            if len(self.auth_jwt_secret.strip()) < 32:
+                raise ValueError("AUTH_JWT_SECRET must be at least 32 characters in production.")
             if not self.allowed_origins:
                 raise ValueError("ALLOWED_ORIGINS must be set in production.")
             if self.trusted_hosts == ["localhost", "127.0.0.1"]:

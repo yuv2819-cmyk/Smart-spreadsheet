@@ -13,7 +13,8 @@ from app.config import get_settings
 from app.database import AsyncSessionLocal, Base, engine
 from app.middleware import RequestIdMiddleware, SecurityHeadersMiddleware
 from app.models import Tenant, User
-from app.routers import ai, datasets, overview
+from app.routers import ai, auth, datasets, overview
+from app.security import get_password_hash
 
 settings = get_settings()
 logger = logging.getLogger("app.main")
@@ -55,11 +56,13 @@ async def ensure_default_mvp_records() -> None:
                     tenant_id=1,
                     email=email,
                     full_name="Admin User",
-                    hashed_password="mvp-placeholder-password",
+                    hashed_password=get_password_hash(settings.default_admin_password),
                     role="admin",
                     is_active=True,
                 )
             )
+        elif user.hashed_password in {"mvp-placeholder-password", "hashed_password_here"}:
+            user.hashed_password = get_password_hash(settings.default_admin_password)
         await session.commit()
 
 
@@ -103,6 +106,7 @@ app.add_middleware(
 app.include_router(datasets.router)
 app.include_router(ai.router)
 app.include_router(overview.router)
+app.include_router(auth.router)
 
 
 @app.get("/", tags=["Health"])

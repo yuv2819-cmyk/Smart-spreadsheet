@@ -15,6 +15,13 @@ interface DataQualitySummary {
     duplicate_pct: number;
     completeness_pct: number;
     high_missing_columns: DataQualityIssue[];
+    inconsistent_categories?: Array<{
+        column: string;
+        canonical: string;
+        variant_count: number;
+        affected_rows: number;
+        examples: string[];
+    }>;
 }
 
 interface CorrelationInsight {
@@ -123,6 +130,7 @@ export default function AnalystInsightsPanel({ insights }: AnalystInsightsPanelP
     const topCorrelation = insights.top_correlations?.[0];
     const topSegment = insights.segments?.[0];
     const topMissing = insights.data_quality?.high_missing_columns?.[0];
+    const topInconsistent = insights.data_quality?.inconsistent_categories?.[0];
     const businessSummary = insights.business_summary;
 
     return (
@@ -168,6 +176,12 @@ export default function AnalystInsightsPanel({ insights }: AnalystInsightsPanelP
                     </p>
                 ) : (
                     <p className="text-sm text-muted-foreground">No major missing-data issues detected.</p>
+                )}
+                {topInconsistent && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                        Inconsistent labels in <span className="font-medium text-foreground">{topInconsistent.column}</span>{" "}
+                        ({topInconsistent.variant_count} variants): {topInconsistent.examples.slice(0, 2).join(", ")}
+                    </p>
                 )}
             </div>
 

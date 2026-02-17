@@ -36,6 +36,38 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+
+# Auth Schemas
+class AuthUser(BaseModel):
+    id: int
+    tenant_id: int
+    email: EmailStr
+    full_name: Optional[str] = None
+    is_active: bool
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
+class AuthSignUpRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    full_name: Optional[str] = Field(default=None, max_length=255)
+    workspace_name: Optional[str] = Field(default=None, max_length=255)
+
+
+class AuthSignInRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: AuthUser
+
 # Dataset Schemas
 class DatasetBase(BaseModel):
     name: str

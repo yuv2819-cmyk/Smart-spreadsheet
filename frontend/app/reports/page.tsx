@@ -20,6 +20,9 @@ interface GeneratedReport {
     summary: string;
     key_insights: string[];
     recommendations: string[];
+    risks: string[];
+    drivers: string[];
+    kpis: Record<string, string>;
 }
 
 interface OverviewResponse {
@@ -29,6 +32,17 @@ interface OverviewResponse {
     analyst_insights?: {
         executive_summary?: string;
         recommendations?: string[];
+        alerts?: Array<{ title: string; description: string; severity: string }>;
+        key_drivers?: {
+            positive_drivers?: Array<{ driver: string; impact: number; metric: string }>;
+            negative_drivers?: Array<{ driver: string; impact: number; metric: string }>;
+        };
+        business_summary?: {
+            total_revenue?: number | null;
+            total_cost?: number | null;
+            total_profit?: number | null;
+            profit_margin_pct?: number | null;
+        };
     } | null;
 }
 
@@ -45,7 +59,13 @@ function loadReports(): GeneratedReport[] {
         const raw = localStorage.getItem(REPORTS_STORAGE_KEY);
         if (!raw) return [];
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((report) => ({
+            ...report,
+            risks: Array.isArray(report?.risks) ? report.risks : [],
+            drivers: Array.isArray(report?.drivers) ? report.drivers : [],
+            kpis: report?.kpis && typeof report.kpis === "object" ? report.kpis : {},
+        }));
     } catch {
         return [];
     }
@@ -73,6 +93,27 @@ function buildReportMarkdown(report: GeneratedReport): string {
         lines.push("- No insights available.");
     } else {
         report.key_insights.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("");
+    lines.push("## KPI Snapshot");
+    if (Object.keys(report.kpis).length === 0) {
+        lines.push("- KPI snapshot unavailable.");
+    } else {
+        Object.entries(report.kpis).forEach(([key, value]) => lines.push(`- ${key}: ${value}`));
+    }
+    lines.push("");
+    lines.push("## Risk Alerts");
+    if (report.risks.length === 0) {
+        lines.push("- No major risks detected.");
+    } else {
+        report.risks.forEach((item) => lines.push(`- ${item}`));
+    }
+    lines.push("");
+    lines.push("## Driver Highlights");
+    if (report.drivers.length === 0) {
+        lines.push("- No key drivers available.");
+    } else {
+        report.drivers.forEach((item) => lines.push(`- ${item}`));
     }
     lines.push("");
     lines.push("## Recommendations");
@@ -162,6 +203,27 @@ export default function ReportsPage() {
                 || "Summary unavailable.";
             const keyInsights = summaryPayload?.key_insights || [];
             const recommendations = overview?.analyst_insights?.recommendations || [];
+            const risks = (overview?.analyst_insights?.alerts || [])
+                .slice(0, 5)
+                .map((alert) => `[${String(alert.severity).toUpperCase()}] ${alert.title}: ${alert.description}`);
+
+            const positiveDrivers = overview?.analyst_insights?.key_drivers?.positive_drivers || [];
+            const negativeDrivers = overview?.analyst_insights?.key_drivers?.negative_drivers || [];
+            const drivers = [
+                ...positiveDrivers.slice(0, 3).map(
+                    (item) => `Positive: ${item.driver} (${item.metric} ${item.impact.toLocaleString(undefined, { maximumFractionDigits: 2 })})`
+                ),
+                ...negativeDrivers.slice(0, 3).map(
+                    (item) => `Negative: ${item.driver} (${item.metric} ${item.impact.toLocaleString(undefined, { maximumFractionDigits: 2 })})`
+                ),
+            ];
+
+            const business = overview?.analyst_insights?.business_summary;
+            const kpis: Record<string, string> = {};
+            if (typeof business?.total_revenue === "number") kpis["Total Revenue"] = business.total_revenue.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            if (typeof business?.total_cost === "number") kpis["Total Cost"] = business.total_cost.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            if (typeof business?.total_profit === "number") kpis["Total Profit"] = business.total_profit.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            if (typeof business?.profit_margin_pct === "number") kpis["Profit Margin %"] = business.profit_margin_pct.toFixed(2);
 
             const tempReport: GeneratedReport = {
                 id: `${Date.now()}`,
@@ -174,6 +236,9 @@ export default function ReportsPage() {
                 summary,
                 key_insights: keyInsights,
                 recommendations,
+                risks,
+                drivers,
+                kpis,
             };
 
             const markdown = buildReportMarkdown(tempReport);
@@ -203,6 +268,32 @@ export default function ReportsPage() {
         anchor.click();
         anchor.remove();
         URL.revokeObjectURL(url);
+    };
+
+    const downloadReportPdf = async (report: GeneratedReport) => {
+        const { jsPDF } = await import("jspdf");
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+        const marginX = 48;
+        const marginY = 56;
+        const maxWidth = doc.internal.pageSize.getWidth() - marginX * 2;
+        const maxHeight = doc.internal.pageSize.getHeight() - marginY;
+        const lines = doc.splitTextToSize(buildReportMarkdown(report), maxWidth);
+
+        let y = marginY;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+
+        for (const line of lines) {
+            if (y > maxHeight) {
+                doc.addPage();
+                y = marginY;
+            }
+            doc.text(String(line), marginX, y);
+            y += 14;
+        }
+
+        const safeName = report.name.replace(/[^a-z0-9-_]+/gi, "_").toLowerCase();
+        doc.save(`${safeName || "report"}.pdf`);
     };
 
     const deleteReport = (reportId: string) => {
@@ -303,9 +394,16 @@ export default function ReportsPage() {
                                                 <button
                                                     onClick={() => downloadReport(report)}
                                                     className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
-                                                    title="Download"
+                                                    title="Download Markdown"
                                                 >
                                                     <Download className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => downloadReportPdf(report)}
+                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    title="Download PDF"
+                                                >
+                                                    <FileText className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => deleteReport(report.id)}

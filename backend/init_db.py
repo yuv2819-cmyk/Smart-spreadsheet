@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import get_settings
 from app.models import Base, Tenant, User
+from app.security import get_password_hash
 
 settings = get_settings()
 
@@ -52,16 +53,19 @@ async def init_db() -> None:
                 tenant_id=tenant.id,
                 email=settings.default_admin_email,
                 full_name="Admin User",
-                hashed_password="hashed_password_here",
+                hashed_password=get_password_hash(settings.default_admin_password),
                 role="admin",
                 is_active=True,
             )
             session.add(user)
+        elif user.hashed_password in {"mvp-placeholder-password", "hashed_password_here"}:
+            user.hashed_password = get_password_hash(settings.default_admin_password)
 
         await session.commit()
         print("Database initialized successfully.")
         print(f"  Tenant: {tenant.name} (ID: {tenant.id})")
         print(f"  User: {user.email} (ID: {user.id})")
+        print(f"  Default password: {settings.default_admin_password}")
         if not reset_db:
             print("  Existing data was preserved. Set RESET_DB=true to force a full reset.")
 

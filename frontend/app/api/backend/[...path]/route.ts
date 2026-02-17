@@ -37,16 +37,6 @@ function buildTargetUrl(path: string[], search: string): string {
 }
 
 async function proxyRequest(req: NextRequest, path: string[]): Promise<NextResponse> {
-    let authToken = "";
-    try {
-        authToken = resolveAuthToken();
-    } catch (error) {
-        return NextResponse.json(
-            { detail: error instanceof Error ? error.message : "Backend proxy not configured" },
-            { status: 500 }
-        );
-    }
-
     const targetUrl = buildTargetUrl(path, req.nextUrl.search);
     const headers = new Headers();
 
@@ -56,19 +46,39 @@ async function proxyRequest(req: NextRequest, path: string[]): Promise<NextRespo
         }
     });
 
-    headers.set("Authorization", `Bearer ${authToken}`);
-    headers.set("X-Tenant-Id", BACKEND_TENANT_ID);
-    headers.set("X-User-Id", BACKEND_USER_ID);
+    const hasIncomingAuth = headers.has("authorization");
+    if (!hasIncomingAuth) {
+        let authToken = "";
+        try {
+            authToken = resolveAuthToken();
+        } catch (error) {
+            return NextResponse.json(
+                { detail: error instanceof Error ? error.message : "Backend proxy not configured" },
+                { status: 500 }
+            );
+        }
+        headers.set("Authorization", `Bearer ${authToken}`);
+        if (!headers.has("X-Tenant-Id")) headers.set("X-Tenant-Id", BACKEND_TENANT_ID);
+        if (!headers.has("X-User-Id")) headers.set("X-User-Id", BACKEND_USER_ID);
+    } else {
+        headers.delete("x-tenant-id");
+        headers.delete("x-user-id");
+    }
 
     const method = req.method.toUpperCase();
-    const requestInit: RequestInit = {
+    const requestInit: RequestInit & { duplex?: "half" } = {
         method,
         headers,
         cache: "no-store",
     };
 
     if (!["GET", "HEAD"].includes(method)) {
-        requestInit.body = await req.arrayBuffer();
+        // Forward the original stream for non-GET requests.
+        // Node fetch requires duplex mode for streamed request bodies.
+        if (req.body) {
+            requestInit.body = req.body;
+            requestInit.duplex = "half";
+        }
     }
 
     let upstreamResponse: Response;

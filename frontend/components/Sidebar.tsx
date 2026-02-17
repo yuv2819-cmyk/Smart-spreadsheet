@@ -9,10 +9,11 @@ import {
     ChevronLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getAuthUser, getUserInitials, type AuthUser } from "@/lib/auth";
 
 const navItems = [
     { icon: Home, label: "Overview", href: "/overview" },
@@ -24,7 +25,19 @@ const navItems = [
 
 export default function Sidebar() {
     const [collapsed, setCollapsed] = useState(false);
+    const [user, setUser] = useState<AuthUser | null>(null);
     const pathname = usePathname();
+
+    useEffect(() => {
+        const syncUser = () => setUser(getAuthUser());
+        syncUser();
+        window.addEventListener("auth-changed", syncUser);
+        return () => window.removeEventListener("auth-changed", syncUser);
+    }, []);
+
+    const userInitials = getUserInitials(user);
+    const userLabel = user?.full_name || "User";
+    const userEmail = user?.email || "Not signed in";
 
     return (
         <aside
@@ -93,12 +106,12 @@ export default function Sidebar() {
                     collapsed && "justify-center"
                 )}>
                     <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-500 to-fuchsia-500 flex items-center justify-center text-white text-xs font-bold">
-                        JD
+                        {userInitials}
                     </div>
                     {!collapsed && (
                         <div className="text-left overflow-hidden">
-                            <p className="text-sm font-medium truncate">John Doe</p>
-                            <p className="text-xs text-muted-foreground truncate">john@example.com</p>
+                            <p className="text-sm font-medium truncate">{userLabel}</p>
+                            <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
                         </div>
                     )}
                 </button>

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from calendar import month_name
 from typing import Any
 
 import pandas as pd
@@ -10,6 +12,32 @@ VOLUME_HINT_TOKENS = ("quantity", "qty", "units", "orders", "count", "volume")
 COST_HINT_TOKENS = ("cost", "cogs", "expense", "spend", "ad_spend", "opex", "refund")
 PROFIT_HINT_TOKENS = ("profit", "margin", "earnings", "net_income")
 SEGMENT_HINT_TOKENS = ("region", "product", "category", "channel", "segment", "plan", "team")
+MONTH_LOOKUP = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
 
 
 def _clean_label(value: Any) -> str:
@@ -87,7 +115,54 @@ def _find_best_metric_column(columns: list[str], numeric_columns: list[str]) -> 
     return numeric_columns[0]
 
 
-def _build_data_quality(df: pd.DataFrame) -> dict[str, Any]:
+def _build_inconsistent_category_signals(
+    df: pd.DataFrame,
+    categorical_columns: list[str],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+
+    for column in categorical_columns:
+        series = df[column].dropna().astype(str)
+        if series.empty:
+            continue
+
+        normalized_map: dict[str, dict[str, Any]] = {}
+        for raw in series:
+            cleaned = raw.strip()
+            if not cleaned:
+                continue
+            normalized = re.sub(r"\s+", " ", cleaned).lower()
+            bucket = normalized_map.setdefault(
+                normalized,
+                {
+                    "variants": {},
+                    "count": 0,
+                },
+            )
+            bucket["count"] += 1
+            bucket["variants"][cleaned] = bucket["variants"].get(cleaned, 0) + 1
+
+        for normalized, payload in normalized_map.items():
+            variants = payload["variants"]
+            if len(variants) < 2:
+                continue
+
+            sorted_variants = sorted(variants.items(), key=lambda item: item[1], reverse=True)
+            issues.append(
+                {
+                    "column": column,
+                    "canonical": normalized,
+                    "variant_count": len(variants),
+                    "affected_rows": int(payload["count"]),
+                    "examples": [variant for variant, _ in sorted_variants[:3]],
+                }
+            )
+
+    issues.sort(key=lambda item: item["affected_rows"], reverse=True)
+    return issues[:8]
+
+
+def _build_data_quality(df: pd.DataFrame, categorical_columns: list[str]) -> dict[str, Any]:
     row_count = int(len(df))
     column_count = int(len(df.columns))
     total_cells = max(1, row_count * max(1, column_count))
@@ -109,6 +184,8 @@ def _build_data_quality(df: pd.DataFrame) -> dict[str, Any]:
                 }
             )
 
+    inconsistent_categories = _build_inconsistent_category_signals(df, categorical_columns)
+
     return {
         "rows_analyzed": row_count,
         "columns_analyzed": column_count,
@@ -116,6 +193,7 @@ def _build_data_quality(df: pd.DataFrame) -> dict[str, Any]:
         "duplicate_pct": round((duplicate_rows / max(1, row_count)) * 100, 2),
         "completeness_pct": completeness_pct,
         "high_missing_columns": high_missing_columns[:8],
+        "inconsistent_categories": inconsistent_categories,
     }
 
 
@@ -616,6 +694,192 @@ def _build_chart_explanations(
     return lines[:4]
 
 
+def _build_key_drivers(
+    *,
+    segments: list[dict[str, Any]],
+    profit_loss_breakdown: dict[str, Any],
+    correlations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    positive_drivers: list[dict[str, Any]] = []
+    negative_drivers: list[dict[str, Any]] = []
+
+    segment_column = profit_loss_breakdown.get("segment_column")
+    breakdown_rows = profit_loss_breakdown.get("rows", [])
+    if segment_column and breakdown_rows:
+        sorted_rows = sorted(
+            [row for row in breakdown_rows if isinstance(row.get("profit"), (int, float))],
+            key=lambda row: float(row["profit"]),
+        )
+        for row in sorted_rows[-5:]:
+            if float(row["profit"]) <= 0:
+                continue
+            positive_drivers.append(
+                {
+                    "driver": str(row["segment"]),
+                    "metric": "profit",
+                    "impact": float(row["profit"]),
+                    "direction": "positive",
+                    "source": segment_column,
+                }
+            )
+        for row in sorted_rows[:5]:
+            if float(row["profit"]) >= 0:
+                continue
+            negative_drivers.append(
+                {
+                    "driver": str(row["segment"]),
+                    "metric": "profit",
+                    "impact": float(row["profit"]),
+                    "direction": "negative",
+                    "source": segment_column,
+                }
+            )
+
+    if not positive_drivers and segments:
+        first_segment = segments[0]
+        segment_column = first_segment.get("segment_column")
+        metric_column = first_segment.get("metric_column") or "metric"
+        for row in first_segment.get("top_segments", [])[:5]:
+            positive_drivers.append(
+                {
+                    "driver": str(row.get("segment", "Unknown")),
+                    "metric": metric_column,
+                    "impact": float(row.get("sum", 0.0)),
+                    "direction": "positive",
+                    "source": segment_column,
+                }
+            )
+
+    if correlations:
+        strongest = correlations[0]
+        positive_drivers.append(
+            {
+                "driver": f"{strongest['column_x']} x {strongest['column_y']}",
+                "metric": "correlation",
+                "impact": float(strongest["correlation"]),
+                "direction": "positive" if strongest["correlation"] >= 0 else "negative",
+                "source": "correlation",
+            }
+        )
+
+    return {
+        "positive_drivers": positive_drivers[:5],
+        "negative_drivers": negative_drivers[:5],
+    }
+
+
+def _build_alerts(
+    *,
+    data_quality: dict[str, Any],
+    trend: dict[str, Any] | None,
+    business_summary: dict[str, Any],
+    profit_loss_breakdown: dict[str, Any],
+    simplified_trend: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+
+    def push_alert(severity: str, title: str, description: str, action: str) -> None:
+        alerts.append(
+            {
+                "severity": severity,
+                "title": title,
+                "description": description,
+                "action": action,
+            }
+        )
+
+    completeness_pct = float(data_quality.get("completeness_pct", 0))
+    duplicate_pct = float(data_quality.get("duplicate_pct", 0))
+
+    if completeness_pct < 90:
+        push_alert(
+            "warning",
+            "Low Data Completeness",
+            f"Completeness is {completeness_pct:.2f}%, which may skew KPI calculations.",
+            "Clean missing values in priority columns before strategic decisions.",
+        )
+
+    if duplicate_pct > 1:
+        push_alert(
+            "warning",
+            "Duplicate Records Detected",
+            f"Duplicate row rate is {duplicate_pct:.2f}%.",
+            "Deduplicate source records to prevent inflated totals.",
+        )
+
+    high_missing_columns = data_quality.get("high_missing_columns", [])
+    if high_missing_columns:
+        top_missing = high_missing_columns[0]
+        push_alert(
+            "warning",
+            "High Missing Field",
+            f"Column '{top_missing['column']}' has {top_missing['missing_pct']}% missing values.",
+            "Backfill or drop this field before deriving causal conclusions.",
+        )
+
+    inconsistent_categories = data_quality.get("inconsistent_categories", [])
+    if inconsistent_categories:
+        top_issue = inconsistent_categories[0]
+        push_alert(
+            "info",
+            "Inconsistent Category Labels",
+            f"Column '{top_issue['column']}' has {top_issue['variant_count']} variants for similar labels.",
+            "Normalize casing/spacing to improve segment-level insights.",
+        )
+
+    total_profit = business_summary.get("total_profit")
+    profit_margin_pct = business_summary.get("profit_margin_pct")
+    if isinstance(total_profit, (int, float)) and total_profit < 0:
+        push_alert(
+            "critical",
+            "Net Loss Detected",
+            f"Total profit is {total_profit:,.2f}, indicating an overall loss.",
+            "Prioritize cost reduction in the lowest-performing segments.",
+        )
+
+    if isinstance(profit_margin_pct, (int, float)) and profit_margin_pct < 10:
+        severity = "critical" if profit_margin_pct < 0 else "warning"
+        push_alert(
+            severity,
+            "Low Profit Margin",
+            f"Profit margin is {profit_margin_pct:.2f}%.",
+            "Revisit pricing, discounting, and variable costs.",
+        )
+
+    if trend and isinstance(trend.get("growth_pct"), (int, float)) and float(trend["growth_pct"]) < -8:
+        push_alert(
+            "warning",
+            "Momentum Decline",
+            f"{trend['metric_column']} dropped {abs(float(trend['growth_pct'])):.2f}% vs previous period.",
+            "Investigate drivers behind the latest period decline.",
+        )
+
+    if simplified_trend and isinstance(simplified_trend.get("growth_pct"), (int, float)) and float(
+        simplified_trend["growth_pct"]
+    ) < -8:
+        metric = simplified_trend.get("growth_metric") or "metric"
+        push_alert(
+            "warning",
+            "KPI Trend Down",
+            f"{metric.title()} declined {abs(float(simplified_trend['growth_pct'])):.2f}% in the latest month.",
+            "Validate if this is seasonality or an underlying performance issue.",
+        )
+
+    top_loss_segments = profit_loss_breakdown.get("top_loss_segments", [])
+    if top_loss_segments:
+        worst = top_loss_segments[0]
+        push_alert(
+            "critical",
+            "Loss Concentration Risk",
+            f"Segment '{worst['segment']}' contributes {float(worst['profit']):,.2f} in losses.",
+            "Run a focused recovery plan for this segment first.",
+        )
+
+    severity_rank = {"critical": 0, "warning": 1, "info": 2}
+    alerts.sort(key=lambda item: severity_rank.get(item["severity"], 3))
+    return alerts[:6]
+
+
 def _build_recommendations(
     data_quality: dict[str, Any],
     numeric_profiles: list[dict[str, Any]],
@@ -742,6 +1006,316 @@ def _build_executive_summary(
     return " ".join(parts)
 
 
+def _format_period_label(period: str) -> str:
+    try:
+        year, month = period.split("-")
+        return f"{month_name[int(month)]} {year}"
+    except Exception:
+        return period
+
+
+def _pick_period_from_prompt(prompt: str, periods: list[str]) -> str | None:
+    if not periods:
+        return None
+
+    lowered = prompt.lower()
+    yyyy_mm_match = re.search(r"(20\d{2})-(0[1-9]|1[0-2])", lowered)
+    if yyyy_mm_match:
+        candidate = f"{yyyy_mm_match.group(1)}-{yyyy_mm_match.group(2)}"
+        if candidate in periods:
+            return candidate
+
+    mentioned_month: int | None = None
+    for token, month_idx in MONTH_LOOKUP.items():
+        if re.search(rf"\b{re.escape(token)}\b", lowered):
+            mentioned_month = month_idx
+            break
+
+    if mentioned_month is None:
+        return None
+
+    matches = [period for period in periods if int(period.split("-")[1]) == mentioned_month]
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def _build_monthly_business_frame(df: pd.DataFrame) -> dict[str, Any] | None:
+    if df.empty:
+        return None
+
+    date_columns, parsed_dates = _detect_date_columns(df)
+    date_column = _pick_primary_date_column(date_columns)
+    if not date_column:
+        return None
+
+    numeric_columns = df.select_dtypes(include=["number"]).columns.tolist()
+    revenue_column = _find_column_by_tokens(numeric_columns, REVENUE_HINT_TOKENS)
+    cost_column = _find_column_by_tokens(
+        numeric_columns,
+        COST_HINT_TOKENS,
+        exclude={revenue_column} if revenue_column else set(),
+    )
+    profit_column = _find_column_by_tokens(
+        numeric_columns,
+        PROFIT_HINT_TOKENS,
+        exclude={column for column in [revenue_column, cost_column] if column},
+    )
+
+    date_series = parsed_dates.get(date_column)
+    if date_series is None:
+        return None
+
+    frame = pd.DataFrame({"date": date_series})
+    if revenue_column:
+        frame["revenue"] = pd.to_numeric(df[revenue_column], errors="coerce")
+    if cost_column:
+        frame["cost"] = pd.to_numeric(df[cost_column], errors="coerce")
+    if profit_column:
+        frame["profit"] = pd.to_numeric(df[profit_column], errors="coerce")
+    elif "revenue" in frame.columns and "cost" in frame.columns:
+        frame["profit"] = frame["revenue"] - frame["cost"]
+
+    value_columns = [column for column in ("revenue", "cost", "profit") if column in frame.columns]
+    if not value_columns:
+        return None
+
+    frame = frame.dropna(subset=["date"])
+    if frame.empty:
+        return None
+
+    frame["period"] = frame["date"].dt.to_period("M").astype(str)
+    grouped = frame.groupby("period")[value_columns].sum().sort_index()
+    if grouped.empty:
+        return None
+
+    return {
+        "date_column": date_column,
+        "revenue_column": revenue_column,
+        "cost_column": cost_column,
+        "profit_column": profit_column,
+        "grouped": grouped,
+    }
+
+
+def _build_period_segment_driver(
+    *,
+    df: pd.DataFrame,
+    date_column: str,
+    target_period: str,
+    previous_period: str | None,
+    segment_column: str | None,
+    revenue_column: str | None,
+    cost_column: str | None,
+    profit_column: str | None,
+) -> dict[str, Any] | None:
+    if not segment_column or segment_column not in df.columns:
+        return None
+    if previous_period is None:
+        return None
+
+    parsed_date = pd.to_datetime(df[date_column], errors="coerce")
+    work = pd.DataFrame({"period": parsed_date.dt.to_period("M").astype("string")})
+    work["segment"] = df[segment_column].map(_clean_label)
+
+    if profit_column and profit_column in df.columns:
+        work["profit"] = pd.to_numeric(df[profit_column], errors="coerce")
+    elif revenue_column and cost_column and revenue_column in df.columns and cost_column in df.columns:
+        work["profit"] = (
+            pd.to_numeric(df[revenue_column], errors="coerce")
+            - pd.to_numeric(df[cost_column], errors="coerce")
+        )
+    else:
+        return None
+
+    grouped = (
+        work.dropna(subset=["period", "profit"])
+        .groupby(["period", "segment"])["profit"]
+        .sum()
+        .reset_index()
+    )
+    if grouped.empty:
+        return None
+
+    target = grouped[grouped["period"] == target_period]
+    previous = grouped[grouped["period"] == previous_period]
+    if target.empty or previous.empty:
+        return None
+
+    merged = target.merge(previous, on="segment", how="outer", suffixes=("_target", "_previous")).fillna(0.0)
+    merged["delta"] = merged["profit_target"] - merged["profit_previous"]
+    worst = merged.sort_values("delta", ascending=True).head(3)
+
+    rows = [
+        {
+            "segment": str(row["segment"]),
+            "delta": float(row["delta"]),
+            "target_profit": float(row["profit_target"]),
+            "previous_profit": float(row["profit_previous"]),
+        }
+        for _, row in worst.iterrows()
+        if float(row["delta"]) < 0
+    ]
+    if not rows:
+        return None
+
+    return {
+        "segment_column": segment_column,
+        "rows": rows,
+    }
+
+
+def build_nlq_insight(
+    df: pd.DataFrame,
+    prompt: str,
+    analyst_insights: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if df.empty:
+        return {
+            "answer": "No dataset is available yet. Upload CSV data first.",
+            "chart": None,
+            "explanation": ["Upload data to enable Natural Language Q&A analysis."],
+            "target_period": None,
+            "recommended_actions": ["Upload a dataset and ask a business question."],
+        }
+
+    insights = analyst_insights or build_analyst_insights(df)
+    simplified_trend = insights.get("simplified_trend") if isinstance(insights, dict) else None
+    chart_points = (simplified_trend or {}).get("points", []) if simplified_trend else []
+    chart_series = []
+    for key, label, color in (
+        ("revenue", "Revenue", "#3b82f6"),
+        ("cost", "Cost", "#f59e0b"),
+        ("profit", "Profit", "#10b981"),
+    ):
+        if any(point.get(key) is not None for point in chart_points):
+            chart_series.append({"key": key, "label": label, "color": color})
+
+    chart_payload = (
+        {
+            "chart_type": "composed",
+            "title": "Monthly Revenue, Cost, and Profit",
+            "x_key": "period",
+            "series": chart_series,
+            "data": chart_points[-12:],
+        }
+        if chart_series and chart_points
+        else None
+    )
+
+    monthly_payload = _build_monthly_business_frame(df)
+    target_period = None
+    explanation_lines = list((insights.get("chart_explanations") or [])[:3])
+    recommended_actions = list((insights.get("recommendations") or [])[:4])
+    answer = str(insights.get("executive_summary", "Insight unavailable."))
+
+    if monthly_payload and "profit" in monthly_payload["grouped"].columns:
+        grouped = monthly_payload["grouped"]
+        periods = grouped.index.tolist()
+        target_period = _pick_period_from_prompt(prompt, periods)
+        if target_period is None:
+            target_period = periods[-1]
+
+        period_idx = periods.index(target_period)
+        previous_period = periods[period_idx - 1] if period_idx > 0 else None
+
+        current = grouped.loc[target_period]
+        previous = grouped.loc[previous_period] if previous_period else None
+        current_profit = float(current.get("profit", 0.0))
+        previous_profit = float(previous.get("profit", 0.0)) if previous is not None else None
+        profit_delta = None if previous_profit is None else current_profit - previous_profit
+        profit_delta_pct = None
+        if previous_profit not in (None, 0):
+            profit_delta_pct = ((profit_delta or 0.0) / abs(previous_profit)) * 100
+
+        current_revenue = float(current.get("revenue", 0.0)) if "revenue" in grouped.columns else None
+        previous_revenue = float(previous.get("revenue", 0.0)) if previous is not None and "revenue" in grouped.columns else None
+        revenue_delta = (
+            None
+            if current_revenue is None or previous_revenue is None
+            else current_revenue - previous_revenue
+        )
+
+        current_cost = float(current.get("cost", 0.0)) if "cost" in grouped.columns else None
+        previous_cost = float(previous.get("cost", 0.0)) if previous is not None and "cost" in grouped.columns else None
+        cost_delta = None if current_cost is None or previous_cost is None else current_cost - previous_cost
+
+        period_label = _format_period_label(target_period)
+        if profit_delta is not None:
+            direction = "dropped" if profit_delta < 0 else "increased"
+            pct_label = (
+                f" ({abs(profit_delta_pct):.2f}%)"
+                if isinstance(profit_delta_pct, (int, float))
+                else ""
+            )
+
+            reason_parts: list[str] = []
+            if isinstance(revenue_delta, (int, float)) and revenue_delta < 0:
+                reason_parts.append(
+                    f"revenue fell by {abs(revenue_delta):,.2f}"
+                )
+            if isinstance(cost_delta, (int, float)) and cost_delta > 0:
+                reason_parts.append(
+                    f"costs rose by {cost_delta:,.2f}"
+                )
+            if not reason_parts:
+                reason_parts.append("month-to-month performance shifted across your mix of segments")
+
+            answer = (
+                f"Profit {direction} in {period_label} by {abs(profit_delta):,.2f}{pct_label}. "
+                f"Most likely cause: {' and '.join(reason_parts)}."
+            )
+            explanation_lines = [
+                f"{period_label} profit: {current_profit:,.2f}",
+                (
+                    f"Previous month profit: {previous_profit:,.2f}"
+                    if previous_profit is not None
+                    else "No previous month available for direct comparison."
+                ),
+                (
+                    f"Revenue change: {revenue_delta:,.2f}"
+                    if isinstance(revenue_delta, (int, float))
+                    else "Revenue series is unavailable for this comparison."
+                ),
+                (
+                    f"Cost change: {cost_delta:,.2f}"
+                    if isinstance(cost_delta, (int, float))
+                    else "Cost series is unavailable for this comparison."
+                ),
+            ]
+
+            period_driver = _build_period_segment_driver(
+                df=df,
+                date_column=monthly_payload["date_column"],
+                target_period=target_period,
+                previous_period=previous_period,
+                segment_column=(insights.get("profit_loss_breakdown") or {}).get("segment_column"),
+                revenue_column=monthly_payload["revenue_column"],
+                cost_column=monthly_payload["cost_column"],
+                profit_column=monthly_payload["profit_column"],
+            )
+            if period_driver and period_driver.get("rows"):
+                worst_driver = period_driver["rows"][0]
+                explanation_lines.append(
+                    f"Biggest negative contributor in {period_label}: "
+                    f"{worst_driver['segment']} ({worst_driver['delta']:,.2f} change)."
+                )
+
+    if not recommended_actions:
+        recommended_actions = [
+            "Filter the chart by region or product to isolate root causes faster.",
+            "Track the same KPI weekly with alert thresholds to detect drops early.",
+        ]
+
+    return {
+        "answer": answer,
+        "chart": chart_payload,
+        "explanation": explanation_lines[:6],
+        "target_period": target_period,
+        "recommended_actions": recommended_actions[:4],
+    }
+
+
 def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
     """Build deterministic analyst-style insights for a dataframe."""
     if df.empty:
@@ -755,6 +1329,7 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
                 "duplicate_pct": 0.0,
                 "completeness_pct": 0.0,
                 "high_missing_columns": [],
+                "inconsistent_categories": [],
             },
             "numeric_profiles": [],
             "categorical_profiles": [],
@@ -785,6 +1360,11 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
             },
             "simplified_trend": None,
             "chart_explanations": ["Upload data to enable simplified chart explanations."],
+            "key_drivers": {
+                "positive_drivers": [],
+                "negative_drivers": [],
+            },
+            "alerts": [],
         }
 
     numeric_columns = df.select_dtypes(include=["number"]).columns.tolist()
@@ -817,7 +1397,7 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         profit_series = None
 
     metric_column = _find_best_metric_column(list(df.columns), numeric_columns)
-    data_quality = _build_data_quality(df)
+    data_quality = _build_data_quality(df, categorical_columns)
     numeric_profiles = _build_numeric_profiles(df, numeric_columns)
     categorical_profiles = _build_categorical_profiles(df, categorical_columns)
     correlations = _build_correlations(df, numeric_columns)
@@ -852,6 +1432,18 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         simplified_trend=simplified_trend,
         profit_loss_breakdown=profit_loss_breakdown,
     )
+    key_drivers = _build_key_drivers(
+        segments=segments,
+        profit_loss_breakdown=profit_loss_breakdown,
+        correlations=correlations,
+    )
+    alerts = _build_alerts(
+        data_quality=data_quality,
+        trend=trend,
+        business_summary=business_summary,
+        profit_loss_breakdown=profit_loss_breakdown,
+        simplified_trend=simplified_trend,
+    )
     recommendations = _build_recommendations(
         data_quality,
         numeric_profiles,
@@ -884,4 +1476,6 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         "profit_loss_breakdown": profit_loss_breakdown,
         "simplified_trend": simplified_trend,
         "chart_explanations": chart_explanations,
+        "key_drivers": key_drivers,
+        "alerts": alerts,
     }

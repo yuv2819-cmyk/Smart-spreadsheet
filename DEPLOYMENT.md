@@ -13,7 +13,7 @@ Set these on your backend host:
 ```bash
 ENVIRONMENT=production
 DATABASE_URL=postgresql+asyncpg://user:password@host:5432/smart_spreadsheet
-MVP_API_TOKEN=<strong-random-token>
+AUTH_JWT_SECRET=<long-random-secret-at-least-32-chars>
 ALLOWED_ORIGINS=https://your-frontend-domain
 TRUSTED_HOSTS=your-frontend-domain
 OPENAI_API_KEY=sk-...
@@ -49,7 +49,7 @@ The frontend uses a server-side proxy route (`/api/backend/...`) so backend secr
 ```bash
 NEXT_PUBLIC_API_BASE=/api/backend
 BACKEND_API_URL=https://your-backend-domain
-BACKEND_API_TOKEN=<same-MVP_API_TOKEN-as-backend>
+BACKEND_API_TOKEN=<optional-fallback-service-token>
 BACKEND_TENANT_ID=1
 BACKEND_USER_ID=1
 ```
@@ -58,7 +58,7 @@ Do not use `NEXT_PUBLIC_API_TOKEN` in production.
 
 ## 3. Security Checklist
 
-- Use a long random `MVP_API_TOKEN` (32+ chars).
+- Use a long random `AUTH_JWT_SECRET` (32+ chars).
 - Restrict `ALLOWED_ORIGINS` to your exact frontend domains.
 - Set `TRUSTED_HOSTS` to your actual domains.
 - Keep `AUTO_CREATE_SCHEMA=false` in production.
