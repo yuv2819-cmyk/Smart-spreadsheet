@@ -1,0 +1,31 @@
+invoice_no,order_date,state,city,place_of_supply,channel,customer_email,revenue,cost,profit,output_gst,input_gst,gstin
+INV-2025-001,2025-01-05,Delhi,New Delhi,Delhi,Online,alice@retailindia.in,125000,84000,41000,22500,10080,07ABCDE1234F1Z5
+INV-2025-002,2025-01-19,Maharashtra,Mumbai,Maharashtra,Marketplace,bob@retailindia.in,142000,98000,44000,25560,11760,27ABCDE1234F1Z5
+INV-2025-003,2025-02-02,Karnataka,Bengaluru,Karnataka,Online,charlie@retailindia.in,138000,93000,45000,24840,11160,29ABCDE1234F1Z5
+INV-2025-004,2025-02-16,Tamil Nadu,Chennai,Tamil Nadu,Distributor,diana@retailindia.in,119000,79000,40000,21420,9480,33ABCDE1234F1Z5
+INV-2025-005,2025-03-03,Delhi,New Delhi,Delhi,Online,evan@retailindia.in,155000,104000,51000,27900,12480,07ABCDE1234F1Z5
+INV-2025-006,2025-03-21,Uttar Pradesh,Lucknow,Uttar Pradesh,Online,farah@retailindia.in,164000,112000,52000,29520,13440,09ABCDE1234F1Z5
+INV-2025-007,2025-04-04,Gujarat,Ahmedabad,Gujarat,Marketplace,geeta@retailindia.in,172000,119000,53000,30960,14280,24ABCDE1234F1Z5
+INV-2025-008,2025-04-27,Maharashtra,Pune,Maharashtra,Distributor,harsh@retailindia.in,168000,116000,52000,30240,13920,27ABCDE1234F1Z5
+INV-2025-009,2025-05-08,West Bengal,Kolkata,West Bengal,Online,irfan@retailindia.in,176000,121000,55000,31680,14520,19ABCDE1234F1Z5
+INV-2025-010,2025-05-24,Karnataka,Bengaluru,Karnataka,Marketplace,jyoti@retailindia.in,181000,126000,55000,32580,15120,29ABCDE1234F1Z5
+INV-2025-011,2025-06-09,Telangana,Hyderabad,Telangana,Online,kabir@retailindia.in,187000,129000,58000,33660,15480,36ABCDE1234F1Z5
+INV-2025-012,2025-06-28,Kerala,Kochi,Kerala,Distributor,lavanya@retailindia.in,174000,122000,52000,31320,14640,32ABCDE1234F1Z5
+INV-2025-013,2025-07-06,Maharashtra,Mumbai,Maharashtra,Online,mohan@retailindia.in,193000,133000,60000,34740,15960,27ABCDE1234F1Z5
+INV-2025-014,2025-07-22,Delhi,New Delhi,Delhi,Marketplace,naina@retailindia.in,198000,136000,62000,35640,16320,07ABCDE1234F1Z5
+INV-2025-015,2025-08-12,Gujarat,Surat,Gujarat,Online,om@retailindia.in,206000,142000,64000,37080,17040,24ABCDE1234F1Z5
+INV-2025-016,2025-08-25,Karnataka,Bengaluru,Karnataka,Distributor,priya@retailindia.in,211000,146000,65000,37980,17520,29ABCDE1234F1Z5
+INV-2025-017,2025-09-07,Tamil Nadu,Chennai,Tamil Nadu,Online,qasim@retailindia.in,218000,149000,69000,39240,17880,33ABCDE1234F1Z5
+INV-2025-018,2025-09-24,Uttar Pradesh,Lucknow,Uttar Pradesh,Marketplace,ria@retailindia.in,224000,153000,71000,40320,18360,09ABCDE1234F1Z5
+INV-2025-019,2025-10-03,Delhi,New Delhi,Delhi,Online,sameer@retailindia.in,242000,166000,76000,43560,19920,07ABCDE1234F1Z5
+INV-2025-020,2025-10-22,Maharashtra,Mumbai,Maharashtra,Online,tanvi@retailindia.in,288000,197000,91000,51840,23640,27ABCDE1234F1Z5
+INV-2025-021,2025-11-05,Gujarat,Ahmedabad,Gujarat,Marketplace,udit@retailindia.in,301000,206000,95000,54180,24720,24ABCDE1234F1Z5
+INV-2025-022,2025-11-27,West Bengal,Kolkata,West Bengal,Distributor,vidya@retailindia.in,294000,201000,93000,52920,24120,19ABCDE1234F1Z5
+INV-2025-023,2025-12-09,Telangana,Hyderabad,Telangana,Online,wasim@retailindia.in,256000,176000,80000,46080,21120,36ABCDE1234F1Z5
+INV-2025-024,2025-12-21,Karnataka,Bengaluru,Karnataka,Marketplace,xena@retailindia.in,249000,171000,78000,44820,20520,29ABCDE1234F1Z5
+INV-2026-025,2026-01-11,Delhi,New Delhi,Delhi,Online,yuvraj@retailindia.in,214000,149000,65000,38520,17880,07ABCDE1234F1Z5
+INV-2026-026,2026-01-26,Maharashtra,Pune,Maharashtra,Distributor,zara@retailindia.in,208000,145000,63000,37440,17400,27ABCDE1234F1Z5
+INV-2026-027,2026-02-08,Tamil Nadu,Chennai,Tamil Nadu,Online,amit@retailindia.in,222000,154000,68000,39960,18480,33ABCDE1234F1Z5
+INV-2026-028,2026-02-24,Karnataka,Bengaluru,Karnataka,Marketplace,beena@retailindia.in,228000,158000,70000,41040,18960,29ABCDE1234F1Z5
+INV-2026-029,2026-03-05,Uttar Pradesh,Lucknow,Uttar Pradesh,Online,chetan@retailindia.in,239000,165000,74000,43020,19800,09ABCDE1234F1Z5
+INV-2026-030,2026-03-22,Delhi,New Delhi,Delhi,Distributor,devika@retailindia.in,246000,170000,76000,44280,20400,07ABCDE1234F1Z5

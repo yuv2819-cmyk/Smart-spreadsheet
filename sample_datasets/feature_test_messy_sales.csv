@@ -1,0 +1,41 @@
+Record ID,Order Date,Region,Segment,Sales Channel,Product Name,Units,Unit Price,Revenue,Cost,Profit,Customer Email,Notes
+1,2025-01-03," North ",SMB,Online,Starter Plan,10,99,990,600,390,alice@example.com,First purchase
+2,01/07/2025,north,smb,Online,Starter Plan,8,99,792,510,,bob@example.com,missing profit
+3,2025/01/10,SOUTH,Enterprise,Partner,Pro Plan,15,199,2985,1700,1285,charlie@example.com,ok
+4,2025-01-12,South ,Enterprise,Partner,Pro Plan,15,199,2985,1700,1285,charlie@example.com,duplicate candidate
+4,2025-01-12,South ,Enterprise,Partner,Pro Plan,15,199,2985,1700,1285,charlie@example.com,duplicate candidate
+5,2025-01-14,east,Mid-Market,Online,Starter Plan,"12 ",99,1188,720,468,dana@example.com,trailing space in units
+6,2025-01-18,EAST ,Mid-market,Online,Starter Plan,11,99,1089,700,389,evan@example.com,category case variant
+7,2025-01-20,West,Enterprise,Direct,Pro Plan,20,199,3980,2500,1480,frank@example.com,good row
+8,2025-01-22, west ,Enterprise,Direct,Pro Plan,20,199,3980,2500,1480,frank@example.com,whitespace region
+9,2025-01-25,West,Enterprise,Direct,Pro Plan,0,199,0,0,0,grace@example.com,zero volume
+10,2025-01-30,North,SMB,Online,Starter Plan,7,99,693,430,263,harry@example.com,ok
+11,2025-02-02,North,SMB,Online,Starter Plan,9,99,891,560,331,irene@example.com,ok
+12,2025-02-05,South,Enterprise,Partner,Pro Plan,18,199,3582,2200,1382,jack@example.com,ok
+13,2025-02-08,South,Enterprise,Partner,Pro Plan,18,199,3582,2200,1382,jack@example.com,duplicate block start
+13,2025-02-08,South,Enterprise,Partner,Pro Plan,18,199,3582,2200,1382,jack@example.com,duplicate block start
+14,2025-02-10,EAST,Mid-Market,Online,Starter Plan,13,99,1287,800,487,kate@example.com,ok
+15,2025-02-12,,Mid-Market,Online,Starter Plan,10,99,990,620,370,luke@example.com,missing region
+16,2025-02-15,East,Mid-Market,Online,Starter Plan,10,99,990,620,370,luke@example.com,near-duplicate non-exact
+17,2025-02-19,North,SMB,Online,Starter Plan,9,99,891,560,331,mia@example.com,ok
+18,2025-02-22,South,Enterprise,Partner,Pro Plan,16,199,3184,1950,1234,nick@example,invalid email
+19,2025-02-25,West,Enterprise,Direct,Pro Plan,21,199,4179,2600,1579,olivia@example.com,ok
+20,2025-02-27,West,Enterprise,Direct,Pro Plan,22,199,4378,2700,1678,peter@example.com,ok
+21,2025-03-01,North,SMB,Online,Starter Plan,8,99,792,500,292,queen@example.com,ok
+22,2025-03-04,North,SMB,Online,Starter Plan,8,99,"$792",500,292,queen@example.com,revenue currency symbol
+23,2025-03-08,South,Enterprise,Partner,Pro Plan,17,199,3383,2100,1283,ryan@example.com,ok
+24,2025-03-10,South,Enterprise,Partner,Pro Plan,17,"one hundred ninety nine",3383,2100,1283,ryan@example.com,non-numeric unit price
+25,2025-03-14,East,Mid-Market,Online,Starter Plan,12,99,1188,740,448,sara@example.com,ok
+26,2025-03-17,East,Mid-Market,Online,Starter Plan,12,99,1188,740,448,sara@example.com,duplicate exact
+26,2025-03-17,East,Mid-Market,Online,Starter Plan,12,99,1188,740,448,sara@example.com,duplicate exact
+27,2025-03-19,West,Enterprise,Direct,Pro Plan,19,199,3781,2400,1381,tom@example.com,ok
+28,2025-03-23,West,Enterprise,Direct,Pro Plan,250,199,49750,32000,17750,uma@example.com,outlier high volume
+29,2025-03-28,North,SMB,Online,Starter Plan,-5,99,-495,-300,-195,vera@example.com,negative units
+30,2025-03-31,North,SMB,Online,Starter Plan,9,99,891,,331,will@example.com,missing cost
+31,2025-04-03,South,Enterprise,Partner,Pro Plan,16,199,3184,1950,1234,xena@example.com,ok
+32,2025-04-07,South,Enterprise,Partner,Pro Plan,16,199,,1950,1234,yuri@example.com,missing revenue
+33,2025-04-10,East,Mid-Market,Online,Starter Plan,11,99,1089,700,389,zane@example.com,ok
+34,2025-04-15,East,Mid-Market,Online,Starter Plan,11,99,1089,700,389,zane@example.com,duplicate exact
+34,2025-04-15,East,Mid-Market,Online,Starter Plan,11,99,1089,700,389,zane@example.com,duplicate exact
+35,2025-13-01,West,Enterprise,Direct,Pro Plan,20,199,3980,2500,1480,ops@example.com,invalid date
+36,2025-04-30,North,SMB,Online,Starter Plan,1000,99,99000,61000,38000,bigdeal@example.com,outlier enterprise-like SMB

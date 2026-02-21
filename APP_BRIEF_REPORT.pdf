@@ -1,0 +1,223 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 2 /Kids [4 0 R 6 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 2304 >>
+stream
+BT
+/F1 11 Tf
+50 790 Td
+(SMART SPREADSHEET - BRIEF APP REPORT) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(Date: 2026-02-21) Tj
+0 -14 Td
+0 -14 Td
+(1\) What This App Is) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(Smart Spreadsheet is a multi-tenant SaaS analytics app for business teams that need quick) Tj
+0 -14 Td
+(insights from CSV exports without writing SQL.) Tj
+0 -14 Td
+0 -14 Td
+(It combines:) Tj
+0 -14 Td
+(- CSV upload and dataset management) Tj
+0 -14 Td
+(- Dashboard analytics \(overview, trends, quality, KPI signals\)) Tj
+0 -14 Td
+(- AI-assisted Q&A and summaries) Tj
+0 -14 Td
+(- Report generation and collaboration workflows) Tj
+0 -14 Td
+(- India-focused insight mode for local business context) Tj
+0 -14 Td
+0 -14 Td
+(2\) What The App Does Today) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(Core Data Workflow) Tj
+0 -14 Td
+0 -14 Td
+(1. User signs in \(workspace + tenant context\).) Tj
+0 -14 Td
+(2. Uploads CSV data.) Tj
+0 -14 Td
+(3. App computes metrics and analyst insights.) Tj
+0 -14 Td
+(4. User asks business questions in natural language.) Tj
+0 -14 Td
+(5. User generates reports and shares outputs.) Tj
+0 -14 Td
+0 -14 Td
+(Key Implemented Capabilities) Tj
+0 -14 Td
+0 -14 Td
+(- Auth and tenant-isolated workspaces \(`/auth/*`\).) Tj
+0 -14 Td
+(- Dataset ingest and retrieval \(`/datasets/*`\).) Tj
+0 -14 Td
+(- Overview metrics and analyst insights \(`/overview/metrics`\).) Tj
+0 -14 Td
+(- AI query/summarize flows \(`/ai/query`, `/ai/summarize`\).) Tj
+0 -14 Td
+(- Data cleaning profile, preview, apply, rollback \(`/cleaning/*`\).) Tj
+0 -14 Td
+(- Report CRUD + sharing/comment/approval \(`/reports/*`\).) Tj
+0 -14 Td
+(- India insights and India trend reporting \(`/india/*`\).) Tj
+0 -14 Td
+(- Connector and workspace settings support.) Tj
+0 -14 Td
+0 -14 Td
+(3\) Product Value) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(The app reduces time from "raw export" to "decision-ready summary" by combining deterministic) Tj
+0 -14 Td
+(analytics with assistant features in one workflow.) Tj
+0 -14 Td
+0 -14 Td
+(Primary value:) Tj
+0 -14 Td
+(- Faster weekly business review cycles.) Tj
+0 -14 Td
+(- Better visibility into margin/profit drivers.) Tj
+0 -14 Td
+(- Clearer data quality issues before making decisions.) Tj
+0 -14 Td
+(- Lower analytics complexity for non-technical teams.) Tj
+0 -14 Td
+0 -14 Td
+(4\) Precision And Trust Status \(Current\)) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 2431 >>
+stream
+BT
+/F1 11 Tf
+50 790 Td
+0 -14 Td
+0 -14 Td
+(The app uses deterministic backend calculations for core metrics and trends.) Tj
+0 -14 Td
+0 -14 Td
+(Recent precision upgrade includes:) Tj
+0 -14 Td
+(- Improved parsing for messy numeric fields \(currency symbols, commas, accounting) Tj
+0 -14 Td
+(  negatives\).) Tj
+0 -14 Td
+(- Shared parsing logic used by overview analytics and cleaning engine.) Tj
+0 -14 Td
+(- Precision audit metadata exposed in insights:) Tj
+0 -14 Td
+(- auto-coerced numeric columns) Tj
+0 -14 Td
+(- ignored numeric-like columns) Tj
+0 -14 Td
+(- coercion confidence score) Tj
+0 -14 Td
+(- UI now shows "Precision Confidence" and precision notes.) Tj
+0 -14 Td
+(- Automated test added for currency-formatted numeric parsing.) Tj
+0 -14 Td
+0 -14 Td
+(5\) Tech Stack) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(- Frontend: Next.js + TypeScript) Tj
+0 -14 Td
+(- Backend: FastAPI + SQLAlchemy + Pandas) Tj
+0 -14 Td
+(- DB: SQLite \(dev\), PostgreSQL-ready production architecture) Tj
+0 -14 Td
+(- Auth: JWT-based) Tj
+0 -14 Td
+(- API proxying through Next.js backend route) Tj
+0 -14 Td
+0 -14 Td
+(6\) Current Strengths) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(- Practical end-to-end analytics flow from upload to report.) Tj
+0 -14 Td
+(- Multi-tenant structure ready for SaaS scaling.) Tj
+0 -14 Td
+(- Deterministic insight layer reduces hallucination risk for core numbers.) Tj
+0 -14 Td
+(- India-localized reporting makes the product region-friendly.) Tj
+0 -14 Td
+(- Built-in cleaning and precision audit improve real-world usability.) Tj
+0 -14 Td
+0 -14 Td
+(7\) Current Gaps) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(- Some advanced analytics remain heuristic for messy/unstructured schemas.) Tj
+0 -14 Td
+(- Enterprise-grade controls can be expanded \(deeper RBAC/audit depth\).) Tj
+0 -14 Td
+(- Production-scale rate limiting should move to distributed backing if needed.) Tj
+0 -14 Td
+0 -14 Td
+(8\) Overall Assessment) Tj
+0 -14 Td
+0 -14 Td
+0 -14 Td
+(Smart Spreadsheet is a solid, functional BI assistant product for SMB/mid-market operators. It) Tj
+0 -14 Td
+(is already useful for real reporting workflows and has clear differentiation through:) Tj
+0 -14 Td
+(- combined cleaning + analytics + AI + report flow) Tj
+0 -14 Td
+(- deterministic metric core) Tj
+0 -14 Td
+(- India-focused insights mode) Tj
+0 -14 Td
+0 -14 Td
+(With continued UI polish and enterprise hardening, it is positioned to grow into a high-utility) Tj
+0 -14 Td
+(operational analytics platform.) Tj
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000002679 00000 n 
+0000002805 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+5288
+%%EOF

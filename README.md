@@ -65,6 +65,10 @@ Server-side (used by Next.js proxy route):
 ## Production Notes
 
 - Frontend now proxies API requests through `frontend/app/api/backend/[...path]/route.ts`, so backend auth token is not exposed to browsers.
+- India-focused mode is available from Settings (`Localization` tab), including:
+  - India fiscal year support (Apr-Mar)
+  - INR + Indian number formatting
+  - India trend overlays and India Trend report generation
 - Backend enforces production config validation:
   - no SQLite in production
   - requires `AUTH_JWT_SECRET`

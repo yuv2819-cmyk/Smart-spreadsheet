@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.database import AsyncSessionLocal, Base, engine
 from app.middleware import RequestIdMiddleware, SecurityHeadersMiddleware
 from app.models import Tenant, User
-from app.routers import ai, auth, billing, cleaning, connectors, datasets, events, overview, reports, workspace
+from app.routers import ai, auth, billing, cleaning, connectors, datasets, events, india, overview, reports, workspace
 from app.security import get_password_hash
 from app.services.connectors_service import run_due_connector_syncs
 
@@ -131,6 +131,7 @@ app.include_router(workspace.router)
 app.include_router(connectors.router)
 app.include_router(billing.router)
 app.include_router(events.router)
+app.include_router(india.router)
 
 
 @app.get("/", tags=["Health"])

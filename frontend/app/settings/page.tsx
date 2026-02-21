@@ -11,7 +11,7 @@ import {
 } from "@/lib/user-settings";
 import { apiFetch } from "@/lib/api-client";
 
-type SettingsTab = "general" | "profile" | "notifications";
+type SettingsTab = "general" | "profile" | "notifications" | "localization";
 
 function Toggle({
     enabled,
@@ -72,7 +72,7 @@ export default function SettingsPage() {
             setError("Subdomain must be 2-40 chars and use only lowercase letters, numbers, and hyphens.");
             return;
         }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.email.trim())) {
+        if (settings.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.email.trim())) {
             setError("Please enter a valid email address.");
             return;
         }
@@ -83,6 +83,7 @@ export default function SettingsPage() {
             subdomain,
             display_name: settings.display_name.trim(),
             email: settings.email.trim().toLowerCase(),
+            fiscal_year_start_month: Math.min(12, Math.max(1, Number(settings.fiscal_year_start_month) || 1)),
         };
         setSettings(normalized);
         try {
@@ -156,6 +157,14 @@ export default function SettingsPage() {
                     >
                         <Bell className="w-4 h-4" />
                         Notifications
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("localization")}
+                        className={`w-full text-left px-3 py-2 rounded-lg font-medium text-sm flex items-center gap-2 ${activeTab === "localization" ? "bg-secondary" : "hover:bg-secondary/50 text-muted-foreground"
+                            }`}
+                    >
+                        <Building className="w-4 h-4" />
+                        Localization
                     </button>
                 </div>
 
@@ -252,6 +261,81 @@ export default function SettingsPage() {
                                     enabled={settings.notifications_product}
                                     onChange={(next) => updateSettings({ notifications_product: next })}
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "localization" && (
+                        <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-sm space-y-4">
+                            <h3 className="font-semibold text-lg mb-1">Localization & India Mode</h3>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-medium text-sm">Enable India Insights Mode</p>
+                                    <p className="text-sm text-muted-foreground">Switch dashboards and reports to India-focused defaults.</p>
+                                </div>
+                                <Toggle
+                                    enabled={settings.india_mode_enabled}
+                                    onChange={(next) =>
+                                        updateSettings({
+                                            india_mode_enabled: next,
+                                            preferred_currency: next ? "INR" : settings.preferred_currency,
+                                            number_format: next ? "indian" : settings.number_format,
+                                            fiscal_year_start_month: next ? 4 : settings.fiscal_year_start_month,
+                                        })
+                                    }
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Preferred Currency</label>
+                                    <select
+                                        value={settings.preferred_currency}
+                                        onChange={(e) => updateSettings({ preferred_currency: e.target.value as "USD" | "INR" })}
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="USD">USD</option>
+                                        <option value="INR">INR</option>
+                                    </select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Number Format</label>
+                                    <select
+                                        value={settings.number_format}
+                                        onChange={(e) => updateSettings({ number_format: e.target.value as "international" | "indian" })}
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="international">International (1,234,567)</option>
+                                        <option value="indian">Indian (12,34,567)</option>
+                                    </select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Fiscal Year Start Month</label>
+                                    <select
+                                        value={String(settings.fiscal_year_start_month)}
+                                        onChange={(e) => updateSettings({ fiscal_year_start_month: Number(e.target.value) })}
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="1">January</option>
+                                        <option value="4">April (India FY)</option>
+                                        <option value="7">July</option>
+                                        <option value="10">October</option>
+                                    </select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Default Report Language</label>
+                                    <select
+                                        value={settings.report_language}
+                                        onChange={(e) =>
+                                            updateSettings({ report_language: e.target.value as "english" | "hindi" | "hinglish" })
+                                        }
+                                        className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="english">English</option>
+                                        <option value="hindi">Hindi (Romanized)</option>
+                                        <option value="hinglish">Hinglish</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     )}

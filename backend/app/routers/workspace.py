@@ -16,7 +16,20 @@ from app.services.events_service import track_event
 
 router = APIRouter(prefix="/workspace", tags=["Workspace"])
 
-SUPPORTED_INTEGRATIONS = ("google-sheets", "slack", "webhook")
+SUPPORTED_INTEGRATIONS: dict[str, str] = {
+    "google-sheets": "sheet",
+    "slack": "url",
+    "webhook": "url",
+    "tally": "token",
+    "zoho-books": "token",
+    "busy": "token",
+    "razorpay": "token_or_url",
+    "phonepe": "token_or_url",
+    "bharatpe": "token_or_url",
+    "amazon-seller": "token",
+    "flipkart-seller": "token",
+    "gst-portal": "token",
+}
 
 
 async def _get_or_create_settings(
@@ -40,6 +53,11 @@ async def _get_or_create_settings(
         theme="system",
         notifications_email=True,
         notifications_product=True,
+        india_mode_enabled=False,
+        preferred_currency="USD",
+        number_format="international",
+        fiscal_year_start_month=1,
+        report_language="english",
         updated_by_user_id=context.user_id,
     )
     db.add(settings)
@@ -87,6 +105,11 @@ async def get_settings(
         theme=settings.theme,  # type: ignore[arg-type]
         notifications_email=settings.notifications_email,
         notifications_product=settings.notifications_product,
+        india_mode_enabled=settings.india_mode_enabled,
+        preferred_currency=settings.preferred_currency,  # type: ignore[arg-type]
+        number_format=settings.number_format,  # type: ignore[arg-type]
+        fiscal_year_start_month=settings.fiscal_year_start_month,
+        report_language=settings.report_language,  # type: ignore[arg-type]
     )
 
 
@@ -104,13 +127,25 @@ async def put_settings(
     settings.theme = payload.theme
     settings.notifications_email = payload.notifications_email
     settings.notifications_product = payload.notifications_product
+    settings.india_mode_enabled = payload.india_mode_enabled
+    settings.preferred_currency = payload.preferred_currency
+    settings.number_format = payload.number_format
+    settings.fiscal_year_start_month = int(payload.fiscal_year_start_month)
+    settings.report_language = payload.report_language
     settings.updated_by_user_id = context.user_id
     await db.commit()
     await track_event(
         db,
         context=context,
         event_name="workspace_settings_updated",
-        payload={"theme": payload.theme},
+        payload={
+            "theme": payload.theme,
+            "india_mode_enabled": payload.india_mode_enabled,
+            "preferred_currency": payload.preferred_currency,
+            "number_format": payload.number_format,
+            "fiscal_year_start_month": payload.fiscal_year_start_month,
+            "report_language": payload.report_language,
+        },
     )
     await db.commit()
     return payload
@@ -166,7 +201,7 @@ async def list_integrations(
     existing = {item.integration_key: item for item in result.scalars().all()}
 
     response: list[IntegrationConfigPayload] = []
-    for key in SUPPORTED_INTEGRATIONS:
+    for key in SUPPORTED_INTEGRATIONS.keys():
         item = existing.get(key)
         if item is None:
             response.append(
@@ -303,10 +338,41 @@ async def test_integration(
     now = datetime.now(timezone.utc)
 
     try:
-        if integration_key == "google-sheets":
-            ok = ("docs.google.com/spreadsheets" in item.config) or (len(item.config) >= 12)
+        mode = SUPPORTED_INTEGRATIONS[integration_key]
+        config_value = (item.config or "").strip()
+
+        if mode == "sheet":
+            ok = ("docs.google.com/spreadsheets" in config_value) or (len(config_value) >= 12)
             note = "Sheet reference format looks valid." if ok else "Sheet reference looks invalid."
+        elif mode == "token":
+            ok = len(config_value) >= 6
+            note = "Credential format looks valid." if ok else "Credential format looks too short."
+        elif mode == "token_or_url":
+            is_url = config_value.startswith("http://") or config_value.startswith("https://")
+            if is_url:
+                payload = json.dumps(
+                    {
+                        "event": "integration_test",
+                        "source": "smartsheet",
+                        "integration": integration_key,
+                        "timestamp": now.isoformat(),
+                    }
+                ).encode("utf-8")
+                req = urllib_request.Request(
+                    config_value,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib_request.urlopen(req, timeout=8) as response:
+                    ok = 200 <= int(response.status) < 300
+                    note = "Endpoint test payload delivered." if ok else f"Endpoint responded with {response.status}."
+            else:
+                ok = len(config_value) >= 8
+                note = "Credential format looks valid." if ok else "Credential format looks too short."
         else:
+            if not (config_value.startswith("http://") or config_value.startswith("https://")):
+                raise ValueError("URL must start with http:// or https://")
             payload = json.dumps(
                 {
                     "event": "integration_test",
@@ -316,7 +382,7 @@ async def test_integration(
                 }
             ).encode("utf-8")
             req = urllib_request.Request(
-                item.config,
+                config_value,
                 data=payload,
                 headers={"Content-Type": "application/json"},
                 method="POST",

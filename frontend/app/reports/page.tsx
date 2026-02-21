@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle2, Download, FileText, Loader2, MessageSquare, Share2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Calendar, CheckCircle2, Download, FileText, Loader2, MessageSquare, RefreshCw, Share2, Trash2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
 import { trackEvent } from "@/lib/analytics";
 
 type ReportStatus = "Ready" | "Failed";
-type ReportType = "Executive" | "Analyst";
+type ReportType = "Executive" | "Analyst" | "India Trend";
 type DateRange = "7d" | "30d" | "all";
-type ReportTypeFilter = "All" | "Executive" | "Analyst";
+type ReportTypeFilter = "All" | "Executive" | "Analyst" | "India Trend";
 
 interface GeneratedReport {
     id: number;
@@ -54,7 +54,9 @@ interface AISummaryResponse {
 }
 
 function normalizeReportType(value: unknown): ReportType {
-    return value === "Analyst" ? "Analyst" : "Executive";
+    if (value === "Analyst") return "Analyst";
+    if (value === "India Trend") return "India Trend";
+    return "Executive";
 }
 
 function normalizeReport(raw: unknown): GeneratedReport | null {
@@ -171,33 +173,35 @@ export default function ReportsPage() {
     const [error, setError] = useState<string | null>(null);
     const [typeFilter, setTypeFilter] = useState<ReportTypeFilter>("All");
     const [dateRange, setDateRange] = useState<DateRange>("30d");
+    const [indiaReportLanguage, setIndiaReportLanguage] = useState<"english" | "hindi" | "hinglish">("english");
+
+    const loadReports = useCallback(async () => {
+        setLoadingReports(true);
+        try {
+            const response = await apiFetch("/reports");
+            if (!response.ok) {
+                throw new Error("Unable to load reports.");
+            }
+            const payload = await response.json();
+            if (!Array.isArray(payload)) {
+                throw new Error("Invalid reports response.");
+            }
+            const normalized = payload
+                .map((item) => normalizeReport(item))
+                .filter((item): item is GeneratedReport => item !== null);
+            setReports(normalized);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Unable to load reports.";
+            setError(message);
+            setReports([]);
+        } finally {
+            setLoadingReports(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchReports = async () => {
-            try {
-                const response = await apiFetch("/reports");
-                if (!response.ok) {
-                    throw new Error("Unable to load reports.");
-                }
-                const payload = await response.json();
-                if (!Array.isArray(payload)) {
-                    throw new Error("Invalid reports response.");
-                }
-                const normalized = payload
-                    .map((item) => normalizeReport(item))
-                    .filter((item): item is GeneratedReport => item !== null);
-                setReports(normalized);
-            } catch (e) {
-                const message = e instanceof Error ? e.message : "Unable to load reports.";
-                setError(message);
-                setReports([]);
-            } finally {
-                setLoadingReports(false);
-            }
-        };
-
-        fetchReports();
-    }, []);
+        void loadReports();
+    }, [loadReports]);
 
     const filteredReports = useMemo(
         () =>
@@ -324,6 +328,56 @@ export default function ReportsPage() {
         }
     };
 
+    const generateIndiaReport = async () => {
+        setGenerating(true);
+        setError(null);
+        try {
+            const latestRes = await apiFetch("/datasets/latest");
+            if (!latestRes.ok) {
+                throw new Error("No dataset found. Upload a CSV first.");
+            }
+            const latest = await latestRes.json();
+            const datasetId = Number(latest?.id);
+            if (!Number.isFinite(datasetId)) {
+                throw new Error("Invalid dataset id returned by API.");
+            }
+
+            const response = await apiFetch("/india/report", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ dataset_id: datasetId, language: indiaReportLanguage }),
+            });
+            if (!response.ok) {
+                let message = "Failed to generate India trend report.";
+                try {
+                    const body = await response.json();
+                    message = body.detail || message;
+                } catch {
+                    // ignore
+                }
+                throw new Error(message);
+            }
+
+            const createdRaw = await response.json();
+            const created = normalizeReport(createdRaw);
+            if (!created) {
+                throw new Error("Backend returned invalid India report payload.");
+            }
+            setReports((prev) => [created, ...prev]);
+            await trackEvent("frontend_india_report_generated", {
+                report_id: created.id,
+                dataset_id: created.dataset_id,
+                language: indiaReportLanguage,
+            });
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to generate India report.";
+            setError(message);
+            await trackEvent("frontend_india_report_generate_failed", { language: indiaReportLanguage });
+        } finally {
+            setGenerating(false);
+        }
+    };
+
     const downloadReport = (report: GeneratedReport) => {
         const markdown = buildReportMarkdown(report);
         const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
@@ -429,52 +483,83 @@ export default function ReportsPage() {
     };
 
     return (
-        <div className="flex flex-col gap-6 h-full animate-in fade-in zoom-in-95 duration-500">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-                    <p className="text-muted-foreground">Generate downloadable analyst reports from your latest CSV.</p>
+        <div className="flex h-full flex-col gap-5 animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="section-header">
+                    <h1 className="section-title">Reports</h1>
+                    <p className="section-subtitle">Generate downloadable analyst reports from your latest CSV.</p>
                 </div>
-                <button
-                    onClick={generateReport}
-                    disabled={generating}
-                    className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-60"
-                >
-                    {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                    {generating ? "Generating..." : "Generate Report"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => void loadReports()}
+                        disabled={loadingReports}
+                        className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-secondary/60 px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-50"
+                    >
+                        <RefreshCw className={cn("h-4 w-4", loadingReports && "animate-spin")} />
+                        Refresh
+                    </button>
+                    <select
+                        value={indiaReportLanguage}
+                        onChange={(e) => setIndiaReportLanguage(e.target.value as "english" | "hindi" | "hinglish")}
+                        className="rounded-lg border border-border/70 bg-secondary/60 px-3 py-2 text-sm font-medium"
+                    >
+                        <option value="english">India Report: English</option>
+                        <option value="hindi">India Report: Hindi</option>
+                        <option value="hinglish">India Report: Hinglish</option>
+                    </select>
+                    <button
+                        onClick={generateReport}
+                        disabled={generating}
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+                    >
+                        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                        {generating ? "Generating..." : "Generate Report"}
+                    </button>
+                    <button
+                        onClick={generateIndiaReport}
+                        disabled={generating}
+                        className="inline-flex items-center gap-2 rounded-lg border border-border/70 bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-60"
+                    >
+                        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
+                        {generating ? "Generating..." : "Generate India Trend"}
+                    </button>
+                </div>
             </div>
             {error && (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <div className="panel-surface-tight border-destructive/40 bg-destructive/10 text-sm text-destructive">
                     {error}
                 </div>
             )}
 
-            <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl overflow-hidden shadow-sm flex-1 min-h-0">
-                <div className="p-4 border-b border-border/50 flex flex-wrap items-center gap-2">
+            <div className="panel-surface flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+                <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-3">
                     <select
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value as ReportTypeFilter)}
-                        className="px-3 py-1.5 text-sm bg-secondary border border-border/50 rounded-md"
+                        className="rounded-md border border-border/60 bg-secondary px-3 py-1.5 text-sm"
                     >
                         <option value="All">All Types</option>
                         <option value="Executive">Executive</option>
                         <option value="Analyst">Analyst</option>
+                        <option value="India Trend">India Trend</option>
                     </select>
                     <button
                         onClick={() => setDateRange(dateRange === "30d" ? "all" : "30d")}
-                        className="px-3 py-1.5 text-sm font-medium bg-secondary text-secondary-foreground rounded-md flex items-center gap-2"
+                        className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground"
                     >
-                        <Calendar className="w-3.5 h-3.5" />
+                        <Calendar className="h-3.5 w-3.5" />
                         {dateRange === "all" ? "All Time" : "Last 30 Days"}
                     </button>
+                    <div className="ml-auto text-xs text-muted-foreground">
+                        {filteredReports.length} result{filteredReports.length === 1 ? "" : "s"}
+                    </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="min-h-0 overflow-auto">
                     {loadingReports ? (
                         <div className="p-8 text-center text-sm text-muted-foreground">
                             <div className="inline-flex items-center gap-2">
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                                 Loading reports...
                             </div>
                         </div>
@@ -483,41 +568,47 @@ export default function ReportsPage() {
                             No reports found for the selected filter.
                         </div>
                     ) : (
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-muted-foreground uppercase bg-secondary/50">
+                        <table className="w-full text-left text-sm">
+                            <thead className="sticky top-0 z-10 bg-secondary/80 text-xs uppercase text-muted-foreground backdrop-blur-sm">
                                 <tr>
                                     <th className="px-6 py-3">Report Name</th>
                                     <th className="px-6 py-3">Type</th>
                                     <th className="px-6 py-3">Date</th>
-                                    <th className="px-6 py-3">Size</th>
+                                    <th className="px-6 py-3 text-right">Size</th>
                                     <th className="px-6 py-3">Status</th>
                                     <th className="px-6 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/50">
-                                {filteredReports.map((report) => (
-                                    <tr key={report.id} className="hover:bg-muted/50 transition-colors group">
-                                        <td className="px-6 py-4 font-medium flex items-center gap-3">
-                                            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                                <FileText className="w-4 h-4" />
-                                            </div>
-                                            <div>
-                                                <p>{report.name}</p>
-                                                <p className="text-xs text-muted-foreground">Dataset #{report.dataset_id}</p>
+                                {filteredReports.map((report, index) => (
+                                    <tr
+                                        key={report.id}
+                                        className={cn(
+                                            "transition-colors hover:bg-muted/50",
+                                            index % 2 === 0 ? "bg-background/20" : "bg-background/50"
+                                        )}
+                                    >
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                                                    <FileText className="h-4 w-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">{report.name}</p>
+                                                    <p className="text-xs text-muted-foreground">Dataset #{report.dataset_id}</p>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-muted-foreground">{report.type}</td>
                                         <td className="px-6 py-4 text-muted-foreground">
                                             {new Date(report.created_at).toLocaleString()}
                                         </td>
-                                        <td className="px-6 py-4 text-muted-foreground">{report.size_kb}</td>
+                                        <td className="px-6 py-4 text-right text-muted-foreground">{report.size_kb}</td>
                                         <td className="px-6 py-4">
                                             <span
                                                 className={cn(
-                                                    "px-2 py-1 rounded-full text-xs font-medium",
-                                                    report.status === "Ready"
-                                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                                        : "bg-destructive/10 text-destructive"
+                                                    "status-badge",
+                                                    report.status === "Ready" ? "status-badge--success" : "status-badge--error"
                                                 )}
                                             >
                                                 {report.status}
@@ -527,45 +618,45 @@ export default function ReportsPage() {
                                             <div className="inline-flex items-center gap-1">
                                                 <button
                                                     onClick={() => downloadReport(report)}
-                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary"
                                                     title="Download Markdown"
                                                 >
-                                                    <Download className="w-4 h-4" />
+                                                    <Download className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => downloadReportPdf(report)}
-                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary"
                                                     title="Download PDF"
                                                 >
-                                                    <FileText className="w-4 h-4" />
+                                                    <FileText className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => void shareReport(report.id)}
-                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary"
                                                     title="Create Share Link"
                                                 >
-                                                    <Share2 className="w-4 h-4" />
+                                                    <Share2 className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => void commentReport(report.id)}
-                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-primary"
                                                     title="Add Comment"
                                                 >
-                                                    <MessageSquare className="w-4 h-4" />
+                                                    <MessageSquare className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => void approveReport(report.id)}
-                                                    className="text-muted-foreground hover:text-emerald-600 transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-emerald-600"
                                                     title="Approve Report"
                                                 >
-                                                    <CheckCircle2 className="w-4 h-4" />
+                                                    <CheckCircle2 className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => void deleteReport(report.id)}
-                                                    className="text-muted-foreground hover:text-destructive transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
                                                     title="Delete"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    <Trash2 className="h-4 w-4" />
                                                 </button>
                                             </div>
                                         </td>

@@ -8,6 +8,11 @@ export interface UserSettings {
     theme: ThemePreference;
     notifications_email: boolean;
     notifications_product: boolean;
+    india_mode_enabled: boolean;
+    preferred_currency: "USD" | "INR";
+    number_format: "international" | "indian";
+    fiscal_year_start_month: number;
+    report_language: "english" | "hindi" | "hinglish";
 }
 
 export const SETTINGS_STORAGE_KEY = "smartsheet_settings_v1";
@@ -20,6 +25,11 @@ export const DEFAULT_SETTINGS: UserSettings = {
     theme: "system",
     notifications_email: true,
     notifications_product: true,
+    india_mode_enabled: false,
+    preferred_currency: "USD",
+    number_format: "international",
+    fiscal_year_start_month: 1,
+    report_language: "english",
 };
 
 export function loadSettings(): UserSettings {

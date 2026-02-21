@@ -256,6 +256,11 @@ class WorkspaceSettingsPayload(BaseModel):
     theme: Literal["system", "light", "dark"] = "system"
     notifications_email: bool = True
     notifications_product: bool = True
+    india_mode_enabled: bool = False
+    preferred_currency: Literal["USD", "INR"] = "USD"
+    number_format: Literal["international", "indian"] = "international"
+    fiscal_year_start_month: int = Field(default=1, ge=1, le=12)
+    report_language: Literal["english", "hindi", "hinglish"] = "english"
 
 
 class WorkspaceGoalPayload(BaseModel):
@@ -384,4 +389,29 @@ class AnalyticsEventResponse(BaseModel):
     event_name: str
     payload: Dict[str, Any]
     created_at: datetime
+
+
+# India Insights Schemas
+class IndiaInsightsResponse(BaseModel):
+    dataset_id: Optional[int] = None
+    locale: str
+    currency: str
+    number_format: str
+    fiscal_year_start_month: int
+    signals: Dict[str, Any] = Field(default_factory=dict)
+    macro_overlay: List[Dict[str, Any]] = Field(default_factory=list)
+    fiscal_year_summary: List[Dict[str, Any]] = Field(default_factory=list)
+    festival_impact: List[Dict[str, Any]] = Field(default_factory=list)
+    state_performance: List[Dict[str, Any]] = Field(default_factory=list)
+    tier_performance: List[Dict[str, Any]] = Field(default_factory=list)
+    gst_summary: Dict[str, Any] = Field(default_factory=dict)
+    sector_benchmarks: Dict[str, Any] = Field(default_factory=dict)
+    compliance_alerts: List[Dict[str, Any]] = Field(default_factory=list)
+    localization: Dict[str, Any] = Field(default_factory=dict)
+    recommended_actions: List[str] = Field(default_factory=list)
+
+
+class IndiaReportRequest(BaseModel):
+    dataset_id: Optional[int] = None
+    language: Literal["english", "hindi", "hinglish"] = "english"
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     Activity,
     DollarSign,
@@ -20,6 +20,7 @@ import BusinessInsightsSuite, {
     type BusinessSummary,
     type ProfitLossBreakdown,
 } from "@/components/BusinessInsightsSuite";
+import IndiaInsightsPanel, { type IndiaInsightsPayload } from "@/components/IndiaInsightsPanel";
 import { apiFetch } from "@/lib/api-client";
 
 interface OverviewMetrics {
@@ -38,6 +39,10 @@ interface AISummary {
     key_insights: string[];
 }
 
+interface WorkspaceSettingsLite {
+    india_mode_enabled?: boolean;
+}
+
 export default function OverviewPage() {
     const [metrics, setMetrics] = useState<OverviewMetrics | null>(null);
     const [loading, setLoading] = useState(true);
@@ -45,8 +50,11 @@ export default function OverviewPage() {
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [showProfitLoss, setShowProfitLoss] = useState(false);
     const [insightsView, setInsightsView] = useState<"executive" | "analyst">("executive");
+    const [indiaModeEnabled, setIndiaModeEnabled] = useState(false);
+    const [indiaInsights, setIndiaInsights] = useState<IndiaInsightsPayload | null>(null);
+    const [indiaLoading, setIndiaLoading] = useState(false);
 
-    const fetchMetrics = async () => {
+    const fetchMetrics = useCallback(async () => {
         try {
             const response = await apiFetch("/overview/metrics");
             if (response.ok) {
@@ -58,11 +66,46 @@ export default function OverviewPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        fetchMetrics();
+        void fetchMetrics();
+    }, [fetchMetrics]);
+
+    useEffect(() => {
+        const loadSettings = async () => {
+            try {
+                const response = await apiFetch("/workspace/settings");
+                if (!response.ok) return;
+                const payload: WorkspaceSettingsLite = await response.json();
+                setIndiaModeEnabled(Boolean(payload.india_mode_enabled));
+            } catch {
+                setIndiaModeEnabled(false);
+            }
+        };
+        void loadSettings();
     }, []);
+
+    useEffect(() => {
+        const loadIndiaInsights = async () => {
+            if (!indiaModeEnabled || !metrics?.dataset_id || (metrics?.total_rows ?? 0) <= 0) {
+                setIndiaInsights(null);
+                return;
+            }
+            setIndiaLoading(true);
+            try {
+                const response = await apiFetch(`/india/insights?dataset_id=${metrics.dataset_id}`);
+                if (!response.ok) throw new Error("Failed to load India insights");
+                const payload = await response.json();
+                setIndiaInsights(payload as IndiaInsightsPayload);
+            } catch {
+                setIndiaInsights(null);
+            } finally {
+                setIndiaLoading(false);
+            }
+        };
+        void loadIndiaInsights();
+    }, [indiaModeEnabled, metrics?.dataset_id, metrics?.total_rows]);
 
     const handleUploadSuccess = () => {
         setLoading(true);
@@ -93,8 +136,9 @@ export default function OverviewPage() {
 
     if (loading) {
         return (
-            <div className="flex h-full items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="panel-surface flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                Loading overview...
             </div>
         );
     }
@@ -108,17 +152,18 @@ export default function OverviewPage() {
     const orderCol = numCols.find((c) => c !== revCol && (c.toLowerCase().includes("quantity") || c.toLowerCase().includes("units")));
     const revenueVal = revCol && metrics?.basic_stats[revCol] ? `$${metrics.basic_stats[revCol].avg.toFixed(0)}` : "N/A";
     const ordersVal = orderCol && metrics?.basic_stats[orderCol] ? Math.round(metrics.basic_stats[orderCol].avg).toString() : "N/A";
+    const hasData = (metrics?.total_rows ?? 0) > 0;
 
     return (
-        <div className="flex flex-col gap-6 h-full animate-in fade-in zoom-in-95 duration-500">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
-                    <p className="text-muted-foreground">Business intelligence dashboard with analyst-grade diagnostics.</p>
+        <div className="flex h-full flex-col gap-5 animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="section-header">
+                    <h1 className="section-title">Overview</h1>
+                    <p className="section-subtitle">Business intelligence dashboard with analyst-grade diagnostics.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                     <CsvUpload onUploadSuccess={handleUploadSuccess} />
-                    {metrics && metrics.total_rows > 0 && (
+                    {hasData && (
                         <button
                             onClick={async () => {
                                 if (confirm("Are you sure you want to clear all data? This cannot be undone.")) {
@@ -132,23 +177,23 @@ export default function OverviewPage() {
                                     }
                                 }
                             }}
-                            className="px-4 py-2 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 border border-destructive/20 transition-colors shadow-sm"
+                            className="rounded-lg border border-destructive/30 px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                         >
                             Clear Data
                         </button>
                     )}
                     <button
                         onClick={handleSummarize}
-                        disabled={isSummarizing || !metrics?.total_rows}
-                        className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50"
+                        disabled={isSummarizing || !hasData}
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                     >
-                        {isSummarizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        {isSummarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                         Summarize
                     </button>
                     {!!profitLossBreakdown?.rows?.length && (
                         <button
                             onClick={() => setShowProfitLoss((prev) => !prev)}
-                            className="px-4 py-2 rounded-lg text-sm font-medium border border-border bg-secondary/60 hover:bg-secondary transition-colors shadow-sm"
+                            className="rounded-lg border border-border/70 bg-secondary/60 px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary"
                         >
                             {showProfitLoss ? "Hide Profit/Loss" : "Show Profit/Loss"}
                         </button>
@@ -156,13 +201,25 @@ export default function OverviewPage() {
                 </div>
             </div>
 
+            {!hasData && (
+                <div className="panel-surface flex items-center justify-between gap-4">
+                    <div>
+                        <h3 className="text-base font-semibold">No dataset loaded</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Upload a CSV to unlock cleaning, AI summary, charts, and report generation.
+                        </p>
+                    </div>
+                    <div className="status-badge status-badge--neutral">Waiting for data</div>
+                </div>
+            )}
+
             {summary && (
-                <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 animate-in slide-in-from-top-4">
-                    <h3 className="font-semibold mb-2 flex items-center gap-2 text-primary">
-                        <Sparkles className="w-4 h-4" />
+                <div className="panel-surface animate-in slide-in-from-top-4">
+                    <h3 className="mb-2 flex items-center gap-2 font-semibold text-primary">
+                        <Sparkles className="h-4 w-4" />
                         AI Summary
                     </h3>
-                    <p className="text-sm mb-4 leading-relaxed">{summary.summary}</p>
+                    <p className="mb-4 text-sm leading-relaxed">{summary.summary}</p>
                     <div className="space-y-2">
                         {summary.key_insights.map((insight, i) => (
                             <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -174,14 +231,14 @@ export default function OverviewPage() {
                 </div>
             )}
 
-            {!!metrics?.dataset_id && (metrics?.total_rows ?? 0) > 0 && (
+            {!!metrics?.dataset_id && hasData && (
                 <DataCleaningPanel
                     datasetId={metrics.dataset_id}
                     onApplied={handleUploadSuccess}
                 />
             )}
 
-            {!!insights && (metrics?.total_rows ?? 0) > 0 && (
+            {!!insights && hasData && (
                 <>
                     <div className="flex items-center justify-between gap-2">
                         <h3 className="font-semibold text-lg">Summary View</h3>
@@ -204,7 +261,7 @@ export default function OverviewPage() {
                     </div>
 
                     {insightsView === "executive" ? (
-                        <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-sm">
+                        <div className="panel-surface">
                             <h4 className="font-semibold mb-2">Executive Summary</h4>
                             <p className="text-sm leading-relaxed">{insights.executive_summary}</p>
                             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -228,7 +285,18 @@ export default function OverviewPage() {
                 showProfitLoss={showProfitLoss}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {indiaModeEnabled && (
+                indiaLoading ? (
+                    <div className="panel-surface inline-flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading India insights...
+                    </div>
+                ) : (
+                    <IndiaInsightsPanel insights={indiaInsights} />
+                )
+            )}
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Total Rows"
                     value={metrics?.total_rows.toLocaleString() || "0"}
