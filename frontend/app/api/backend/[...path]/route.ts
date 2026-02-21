@@ -31,6 +31,8 @@ const HOP_BY_HOP_HEADERS = new Set([
     "trailer",
     "transfer-encoding",
     "upgrade",
+    "expect",
+    "proxy-connection",
     "host",
     "content-length",
     "content-encoding",
@@ -112,29 +114,59 @@ async function proxyRequest(req: NextRequest, path: string[]): Promise<NextRespo
     }
 
     const method = req.method.toUpperCase();
-    const requestInit: RequestInit & { duplex?: "half" } = {
+    const requestInit: RequestInit = {
         method,
         headers,
         cache: "no-store",
+        redirect: "manual",
     };
 
+    let bodyBuffer: ArrayBuffer | undefined;
+    let bodyBytes: Buffer | undefined;
     if (!["GET", "HEAD"].includes(method)) {
-        // Forward the original stream for non-GET requests.
-        // Node fetch requires duplex mode for streamed request bodies.
-        if (req.body) {
-            requestInit.body = req.body;
-            requestInit.duplex = "half";
+        // Materialize request body so we can safely replay it on one-hop redirects
+        // (e.g. FastAPI /reports -> /reports/) without stream reuse errors.
+        bodyBuffer = await req.arrayBuffer();
+        if (bodyBuffer.byteLength > 0) {
+            bodyBytes = Buffer.from(bodyBuffer);
+            requestInit.body = bodyBytes;
         }
     }
 
     let upstreamResponse: Response;
     try {
         upstreamResponse = await fetch(targetUrl, requestInit);
+        if (
+            [301, 302, 303, 307, 308].includes(upstreamResponse.status) &&
+            upstreamResponse.headers.has("location")
+        ) {
+            const location = upstreamResponse.headers.get("location") || "";
+            const redirectUrl = new URL(location, targetUrl).toString();
+
+            const retryInit: RequestInit = {
+                ...requestInit,
+            };
+
+            // Align with standard redirect behavior for 303.
+            if (upstreamResponse.status === 303) {
+                retryInit.method = "GET";
+                delete retryInit.body;
+            } else if (!["GET", "HEAD"].includes(method) && bodyBytes && bodyBytes.length > 0) {
+                retryInit.body = bodyBytes;
+            }
+
+            upstreamResponse = await fetch(redirectUrl, retryInit);
+        }
     } catch (error) {
+        const cause = error instanceof Error ? (error as Error & { cause?: unknown }).cause : undefined;
+        const causeText =
+            cause instanceof Error ? cause.message : cause !== undefined ? String(cause) : "";
+        const baseMessage = error instanceof Error ? error.message : String(error);
+        const combinedMessage = causeText ? `${baseMessage} (cause: ${causeText})` : baseMessage;
         const detail =
             process.env.NODE_ENV === "production"
                 ? "Unable to reach backend API"
-                : `Unable to reach backend API: ${error instanceof Error ? error.message : String(error)}`;
+                : `Unable to reach backend API: ${combinedMessage}`;
         return NextResponse.json({ detail }, { status: 502 });
     }
 
