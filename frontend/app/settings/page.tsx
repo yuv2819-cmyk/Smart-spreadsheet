@@ -6,11 +6,10 @@ import { Bell, Building, RotateCcw, Save, User } from "lucide-react";
 import {
     applyThemePreference,
     DEFAULT_SETTINGS,
-    loadSettings,
-    saveSettings,
     type ThemePreference,
     type UserSettings,
 } from "@/lib/user-settings";
+import { apiFetch } from "@/lib/api-client";
 
 type SettingsTab = "general" | "profile" | "notifications";
 
@@ -37,9 +36,26 @@ function Toggle({
 
 export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState<SettingsTab>("general");
-    const [settings, setSettings] = useState<UserSettings>(() => loadSettings());
+    const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
     const [savedAt, setSavedAt] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const response = await apiFetch("/workspace/settings");
+                if (!response.ok) throw new Error("Failed to load settings.");
+                const payload = await response.json();
+                setSettings({ ...DEFAULT_SETTINGS, ...payload });
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Unable to load settings.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, []);
 
     useEffect(() => {
         applyThemePreference(settings.theme);
@@ -49,7 +65,7 @@ export default function SettingsPage() {
         setSettings((prev) => ({ ...prev, ...patch }));
     };
 
-    const save = () => {
+    const save = async () => {
         setError(null);
         const subdomain = settings.subdomain.trim().toLowerCase();
         if (!/^[a-z0-9-]{2,40}$/.test(subdomain)) {
@@ -69,18 +85,36 @@ export default function SettingsPage() {
             email: settings.email.trim().toLowerCase(),
         };
         setSettings(normalized);
-        saveSettings(normalized);
-        applyThemePreference(normalized.theme);
-        setSavedAt(new Date().toLocaleString());
+        try {
+            const response = await apiFetch("/workspace/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(normalized),
+            });
+            if (!response.ok) throw new Error("Failed to save settings.");
+            applyThemePreference(normalized.theme);
+            setSavedAt(new Date().toLocaleString());
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Unable to save settings.");
+        }
     };
 
-    const resetDefaults = () => {
+    const resetDefaults = async () => {
         if (!window.confirm("Reset all settings to defaults?")) return;
         setSettings(DEFAULT_SETTINGS);
-        saveSettings(DEFAULT_SETTINGS);
-        applyThemePreference(DEFAULT_SETTINGS.theme);
-        setSavedAt(new Date().toLocaleString());
-        setError(null);
+        try {
+            const response = await apiFetch("/workspace/settings", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(DEFAULT_SETTINGS),
+            });
+            if (!response.ok) throw new Error("Failed to reset settings.");
+            applyThemePreference(DEFAULT_SETTINGS.theme);
+            setSavedAt(new Date().toLocaleString());
+            setError(null);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Unable to reset settings.");
+        }
     };
 
     return (
@@ -94,6 +128,7 @@ export default function SettingsPage() {
                     {error}
                 </div>
             )}
+            {loading && <p className="text-sm text-muted-foreground">Loading settings...</p>}
 
             <div className="grid grid-cols-12 gap-8">
                 {/* Settings Sidebar */}

@@ -14,6 +14,8 @@ from app.models import AIQuery, DataRow, Dataset
 from app.rate_limit import rate_limit
 from app.schemas import AIQueryRequest, AIQueryResponse, AISummaryRequest, AISummaryResponse
 from app.services.analytics_service import build_analyst_insights, build_nlq_insight
+from app.services.events_service import track_event
+from app.services.plan_service import enforce_ai_query_limit
 
 router = APIRouter(prefix="/ai", tags=["AI Assistant"])
 settings = get_settings()
@@ -64,6 +66,54 @@ def _build_fallback_response(
     return generated_code, result_data
 
 
+def _build_trust_metadata(
+    *,
+    dataset: Dataset,
+    analyst_insights: dict,
+    sample_data: list[dict],
+    llm_used: bool,
+) -> dict:
+    data_quality = analyst_insights.get("data_quality") or {}
+    completeness = float(data_quality.get("completeness_pct", 0.0))
+    duplicate_pct = float(data_quality.get("duplicate_pct", 0.0))
+    missing_penalty = max(0.0, (100.0 - completeness) * 0.4)
+    duplicate_penalty = min(30.0, duplicate_pct * 0.5)
+    llm_penalty = 4.0 if llm_used else 0.0
+    confidence = max(15.0, min(99.0, 92.0 - missing_penalty - duplicate_penalty - llm_penalty))
+
+    evidence = [
+        {
+            "type": "row_count",
+            "value": int(dataset.row_count or 0),
+            "description": "Total rows considered from dataset metadata.",
+        },
+        {
+            "type": "schema_columns",
+            "value": list((dataset.schema_info or {}).keys())[:12],
+            "description": "Detected columns used for analysis.",
+        },
+        {
+            "type": "sample_rows",
+            "value": sample_data[:2],
+            "description": "Sample rows provided to the analysis engine.",
+        },
+    ]
+
+    assumptions = [
+        "Calculations use uploaded dataset values as-is.",
+        "Numeric/date parsing depends on detected column formats.",
+        "LLM narrative is constrained by deterministic context when enabled.",
+    ]
+
+    return {
+        "confidence_score": round(confidence, 2),
+        "assumptions": assumptions,
+        "evidence": evidence,
+        "model_used": _model_name if llm_used else "deterministic-fallback",
+        "rows_analyzed": int(dataset.row_count or 0),
+    }
+
+
 @router.post("/query", response_model=AIQueryResponse)
 async def generate_ai_query(
     request: AIQueryRequest,
@@ -72,6 +122,12 @@ async def generate_ai_query(
     db: AsyncSession = Depends(get_db),
 ):
     """Generate and execute AI-powered data analysis."""
+    await enforce_ai_query_limit(
+        db,
+        tenant_id=context.tenant_id,
+        user_id=context.user_id,
+    )
+
     start_time = time.time()
 
     result = await db.execute(
@@ -106,6 +162,12 @@ async def generate_ai_query(
     analysis_df = pd.DataFrame(analysis_rows)
     analyst_insights = build_analyst_insights(analysis_df)
     nlq_insight = build_nlq_insight(analysis_df, request.prompt, analyst_insights)
+    trust_metadata = _build_trust_metadata(
+        dataset=dataset,
+        analyst_insights=analyst_insights,
+        sample_data=sample_data,
+        llm_used=client is not None,
+    )
 
     if client is None:
         generated_code, result_data = _build_fallback_response(
@@ -115,6 +177,7 @@ async def generate_ai_query(
             analyst_insights=analyst_insights,
         )
         result_data["nlq"] = nlq_insight
+        result_data["trust"] = trust_metadata
         generated_code = nlq_insight.get("answer") or generated_code
     else:
         try:
@@ -155,7 +218,12 @@ async def generate_ai_query(
                 max_tokens=700,
             )
             generated_code = response.choices[0].message.content or "No response returned from model."
-            result_data = {"generated": True, "analyst_insights": analyst_insights, "nlq": nlq_insight}
+            result_data = {
+                "generated": True,
+                "analyst_insights": analyst_insights,
+                "nlq": nlq_insight,
+                "trust": trust_metadata,
+            }
             if nlq_insight.get("answer"):
                 generated_code = (
                     f"{nlq_insight['answer']}\n\n"
@@ -169,6 +237,7 @@ async def generate_ai_query(
                 analyst_insights=analyst_insights,
             )
             result_data["nlq"] = nlq_insight
+            result_data["trust"] = trust_metadata
             generated_code = nlq_insight.get("answer") or generated_code
 
     execution_time = int((time.time() - start_time) * 1000)
@@ -185,6 +254,18 @@ async def generate_ai_query(
     db.add(ai_query)
     await db.commit()
     await db.refresh(ai_query)
+    await track_event(
+        db,
+        context=context,
+        event_name="ai_query_executed",
+        payload={
+            "dataset_id": request.dataset_id,
+            "execution_time_ms": execution_time,
+            "used_llm": client is not None,
+            "confidence_score": trust_metadata.get("confidence_score"),
+        },
+    )
+    await db.commit()
 
     return AIQueryResponse(
         id=ai_query.id,
@@ -286,6 +367,16 @@ async def summarize_dataset(
             key_insights.append(recommendation)
 
     summary = ai_response.get("summary") or analyst_insights.get("executive_summary", "Summary unavailable.")
+    trust_metadata = _build_trust_metadata(
+        dataset=dataset,
+        analyst_insights=analyst_insights,
+        sample_data=row_data[:5],
+        llm_used=(ai_service.provider == "openai"),
+    )
+    summary = (
+        f"{summary}\n\n"
+        f"_Trust score: {trust_metadata['confidence_score']} based on data completeness and consistency._"
+    )
 
     return AISummaryResponse(summary=summary, key_insights=key_insights[:6])
 

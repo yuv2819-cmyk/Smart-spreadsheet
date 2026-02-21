@@ -105,3 +105,4 @@ python -m compileall backend/app backend/init_db.py
 ## Deployment
 
 See `DEPLOYMENT.md` for full production deployment steps (Vercel + Railway and alternatives).
+For production operations (Alembic migrations and connector sync runbook), see `docs/OPERATOR_RUNBOOK.md`.

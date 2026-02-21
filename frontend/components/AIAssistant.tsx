@@ -5,6 +5,7 @@ import { Send, Sparkles, User, Bot, RefreshCw, Lightbulb, TrendingDown } from "l
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiFetch } from "@/lib/api-client";
+import { trackEvent } from "@/lib/analytics";
 import {
     Bar,
     CartesianGrid,
@@ -39,11 +40,20 @@ interface NLQPayload {
     recommended_actions?: string[];
 }
 
+interface TrustPayload {
+    confidence_score?: number;
+    assumptions?: string[];
+    evidence?: Array<{ description?: string; value?: unknown }>;
+    model_used?: string;
+    rows_analyzed?: number;
+}
+
 interface Message {
     id: string;
     role: "user" | "assistant";
     content: string;
     nlq?: NLQPayload | null;
+    trust?: TrustPayload | null;
 }
 
 const initialAssistantMessage: Message = {
@@ -142,6 +152,7 @@ export default function AIAssistant() {
             const generatedText = (data.generated_code || "").trim();
             const fallbackText = data?.result_data?.generated === false ? data?.result_data?.message : "";
             const nlqPayload: NLQPayload | null = data?.result_data?.nlq ?? null;
+            const trustPayload: TrustPayload | null = data?.result_data?.trust ?? null;
             const assistantText = (nlqPayload?.answer || generatedText || fallbackText || "I could not generate an answer for this question.").trim();
 
             const aiMsg: Message = {
@@ -149,8 +160,14 @@ export default function AIAssistant() {
                 role: "assistant",
                 content: assistantText,
                 nlq: nlqPayload,
+                trust: trustPayload,
             };
             setMessages((prev) => [...prev, aiMsg]);
+            await trackEvent("frontend_ai_query_success", {
+                prompt_length: prompt.length,
+                has_chart: Boolean(nlqPayload?.chart),
+                confidence_score: trustPayload?.confidence_score ?? null,
+            });
         } catch (error) {
             const message = error instanceof Error ? error.message : "Failed to contact AI service.";
             setMessages((prev) => [
@@ -161,6 +178,7 @@ export default function AIAssistant() {
                     content: `Request failed: ${message}`,
                 },
             ]);
+            await trackEvent("frontend_ai_query_failed", { prompt_length: prompt.length });
         } finally {
             setIsTyping(false);
         }
@@ -212,6 +230,7 @@ export default function AIAssistant() {
                         const hasChart = !!chartPayload && chartData.length > 1 && chartSeries.length > 0;
                         const hasExplanation = !!m.nlq?.explanation?.length;
                         const hasActions = !!m.nlq?.recommended_actions?.length;
+                        const hasTrust = !!m.trust;
 
                         return (
                             <motion.div
@@ -314,6 +333,26 @@ export default function AIAssistant() {
                                                     </p>
                                                 ))}
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {hasTrust && (
+                                        <div className="mt-3 rounded-lg border border-border/50 bg-background/40 p-3">
+                                            <div className="text-xs font-semibold mb-2 text-foreground">
+                                                Trust Controls
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">
+                                                Confidence: {typeof m.trust?.confidence_score === "number" ? `${m.trust.confidence_score}%` : "N/A"} | Model: {m.trust?.model_used || "n/a"} | Rows: {m.trust?.rows_analyzed ?? "n/a"}
+                                            </p>
+                                            {!!m.trust?.assumptions?.length && (
+                                                <div className="mt-2 space-y-1">
+                                                    {m.trust.assumptions.slice(0, 2).map((line, idx) => (
+                                                        <p key={`${line}-${idx}`} className="text-xs text-muted-foreground">
+                                                            - {line}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Upload, Loader2, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
+import { trackEvent } from "@/lib/analytics";
 
 interface CsvUploadProps {
     onUploadSuccess: () => void;
@@ -42,6 +43,7 @@ export default function CsvUpload({ onUploadSuccess }: CsvUploadProps) {
 
             // Success
             onUploadSuccess();
+            await trackEvent("frontend_csv_upload_success", { file_name: file.name, file_size: file.size });
             // Reset after short delay
             setTimeout(() => {
                 setFileName(null);
@@ -52,6 +54,7 @@ export default function CsvUpload({ onUploadSuccess }: CsvUploadProps) {
         } catch (error) {
             console.error("Upload error:", error);
             alert("Failed to upload CSV. See console for details.");
+            await trackEvent("frontend_csv_upload_failed", { file_name: file.name });
             setIsUploading(false);
             setFileName(null);
         }

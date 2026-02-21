@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
+import contextlib
 import logging
+import asyncio
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,8 +15,9 @@ from app.config import get_settings
 from app.database import AsyncSessionLocal, Base, engine
 from app.middleware import RequestIdMiddleware, SecurityHeadersMiddleware
 from app.models import Tenant, User
-from app.routers import ai, auth, datasets, overview
+from app.routers import ai, auth, billing, cleaning, connectors, datasets, events, overview, reports, workspace
 from app.security import get_password_hash
+from app.services.connectors_service import run_due_connector_syncs
 
 settings = get_settings()
 logger = logging.getLogger("app.main")
@@ -69,12 +72,27 @@ async def ensure_default_mvp_records() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _configure_logging()
+    scheduler_task: asyncio.Task | None = None
     if settings.auto_create_schema:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     await ensure_default_mvp_records()
+    if settings.enable_connector_scheduler:
+        async def _scheduler_loop() -> None:
+            while True:
+                try:
+                    await run_due_connector_syncs()
+                except Exception as exc:
+                    logger.exception("Connector scheduler iteration failed: %s", str(exc))
+                await asyncio.sleep(max(15, int(settings.connector_scheduler_interval_seconds)))
+
+        scheduler_task = asyncio.create_task(_scheduler_loop())
     logger.info("Application started in %s mode", settings.environment)
     yield
+    if scheduler_task:
+        scheduler_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await scheduler_task
     await engine.dispose()
 
 
@@ -106,7 +124,13 @@ app.add_middleware(
 app.include_router(datasets.router)
 app.include_router(ai.router)
 app.include_router(overview.router)
+app.include_router(cleaning.router)
 app.include_router(auth.router)
+app.include_router(reports.router)
+app.include_router(workspace.router)
+app.include_router(connectors.router)
+app.include_router(billing.router)
+app.include_router(events.router)
 
 
 @app.get("/", tags=["Health"])

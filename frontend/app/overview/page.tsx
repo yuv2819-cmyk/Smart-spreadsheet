@@ -14,6 +14,7 @@ import CsvUpload from "@/components/CsvUpload";
 import OverviewCharts from "@/components/OverviewCharts";
 import StatCard from "@/components/StatCard";
 import AnalystInsightsPanel, { type AnalystInsights } from "@/components/AnalystInsightsPanel";
+import DataCleaningPanel from "@/components/DataCleaningPanel";
 import BusinessInsightsSuite, {
     type AnalystInsightsExt,
     type BusinessSummary,
@@ -171,6 +172,13 @@ export default function OverviewPage() {
                         ))}
                     </div>
                 </div>
+            )}
+
+            {!!metrics?.dataset_id && (metrics?.total_rows ?? 0) > 0 && (
+                <DataCleaningPanel
+                    datasetId={metrics.dataset_id}
+                    onApplied={handleUploadSuccess}
+                />
             )}
 
             {!!insights && (metrics?.total_rows ?? 0) > 0 && (

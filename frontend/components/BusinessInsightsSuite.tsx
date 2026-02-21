@@ -8,6 +8,7 @@ import {
     SlidersHorizontal,
     Target,
 } from "lucide-react";
+import { apiFetch } from "@/lib/api-client";
 
 export interface BusinessSummary {
     profit_available: boolean;
@@ -119,8 +120,6 @@ interface BusinessInsightsSuiteProps {
     showProfitLoss: boolean;
 }
 
-const GOALS_STORAGE_KEY = "smartsheet_goal_targets_v1";
-
 function formatCurrency(value: number | null | undefined): string {
     if (value === null || value === undefined || !Number.isFinite(value)) return "N/A";
     return new Intl.NumberFormat("en-US", {
@@ -162,24 +161,8 @@ export default function BusinessInsightsSuite({
     showProfitLoss,
 }: BusinessInsightsSuiteProps) {
     const [scenario, setScenario] = useState({ pricePct: 0, costPct: 0, volumePct: 0 });
-    const [goalTargets, setGoalTargets] = useState<GoalTargets | null>(() => {
-        if (typeof window === "undefined") return null;
-        try {
-            const raw = localStorage.getItem(GOALS_STORAGE_KEY);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw) as GoalTargets;
-            if (
-                Number.isFinite(parsed?.revenue)
-                && Number.isFinite(parsed?.profit)
-                && Number.isFinite(parsed?.margin)
-            ) {
-                return parsed;
-            }
-            return null;
-        } catch {
-            return null;
-        }
-    });
+    const [goalTargets, setGoalTargets] = useState<GoalTargets | null>(null);
+    const [goalsLoaded, setGoalsLoaded] = useState(false);
 
     const simplifiedTrendPoints = useMemo(
         () => (insights?.simplified_trend?.points || []) as SimplifiedTrendPoint[],
@@ -199,9 +182,46 @@ export default function BusinessInsightsSuite({
     const effectiveGoalTargets = goalTargets || defaultGoalTargets;
 
     useEffect(() => {
-        if (!goalTargets || typeof window === "undefined") return;
-        localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(goalTargets));
-    }, [goalTargets]);
+        const loadGoals = async () => {
+            try {
+                const response = await apiFetch("/workspace/goals");
+                if (!response.ok) throw new Error("failed");
+                const payload = await response.json();
+                if (
+                    Number.isFinite(payload?.revenue_target)
+                    && Number.isFinite(payload?.profit_target)
+                    && Number.isFinite(payload?.margin_target)
+                ) {
+                    setGoalTargets({
+                        revenue: Number(payload.revenue_target),
+                        profit: Number(payload.profit_target),
+                        margin: Number(payload.margin_target),
+                    });
+                }
+            } catch {
+                // Silent fallback to default targets.
+            } finally {
+                setGoalsLoaded(true);
+            }
+        };
+        loadGoals();
+    }, []);
+
+    useEffect(() => {
+        if (!goalsLoaded || !goalTargets) return;
+        const persistGoals = async () => {
+            await apiFetch("/workspace/goals", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    revenue_target: goalTargets.revenue,
+                    profit_target: goalTargets.profit,
+                    margin_target: goalTargets.margin,
+                }),
+            });
+        };
+        persistGoals();
+    }, [goalTargets, goalsLoaded]);
 
     if (!insights || !metrics) return null;
 

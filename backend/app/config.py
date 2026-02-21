@@ -42,6 +42,8 @@ class Settings(BaseSettings):
 
     max_upload_size_bytes: int = 10 * 1024 * 1024
     overview_cache_ttl_seconds: int = 30
+    enable_connector_scheduler: bool = True
+    connector_scheduler_interval_seconds: int = 120
 
     # Only used when AUTO_SEED_MVP_RECORDS or init_db example seeding is enabled.
     default_tenant_name: str = "Example Company"

@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Download, FileText, Loader2, Trash2 } from "lucide-react";
+import { Calendar, CheckCircle2, Download, FileText, Loader2, MessageSquare, Share2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
+import { trackEvent } from "@/lib/analytics";
 
 type ReportStatus = "Ready" | "Failed";
+type ReportType = "Executive" | "Analyst";
 type DateRange = "7d" | "30d" | "all";
 type ReportTypeFilter = "All" | "Executive" | "Analyst";
 
 interface GeneratedReport {
-    id: string;
+    id: number;
     name: string;
-    type: "Executive" | "Analyst";
+    type: ReportType;
     created_at: string;
     size_kb: string;
     status: ReportStatus;
@@ -51,29 +53,49 @@ interface AISummaryResponse {
     key_insights: string[];
 }
 
-const REPORTS_STORAGE_KEY = "smartsheet_reports_v1";
-
-function loadReports(): GeneratedReport[] {
-    if (typeof window === "undefined") return [];
-    try {
-        const raw = localStorage.getItem(REPORTS_STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed.map((report) => ({
-            ...report,
-            risks: Array.isArray(report?.risks) ? report.risks : [],
-            drivers: Array.isArray(report?.drivers) ? report.drivers : [],
-            kpis: report?.kpis && typeof report.kpis === "object" ? report.kpis : {},
-        }));
-    } catch {
-        return [];
-    }
+function normalizeReportType(value: unknown): ReportType {
+    return value === "Analyst" ? "Analyst" : "Executive";
 }
 
-function saveReports(reports: GeneratedReport[]): void {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(REPORTS_STORAGE_KEY, JSON.stringify(reports));
+function normalizeReport(raw: unknown): GeneratedReport | null {
+    if (!raw || typeof raw !== "object") return null;
+    const report = raw as Record<string, unknown>;
+
+    const id = Number(report.id);
+    const datasetId = Number(report.dataset_id);
+    const name = typeof report.name === "string" ? report.name : "";
+    const summary = typeof report.summary === "string" ? report.summary : "";
+
+    if (!Number.isFinite(id) || !Number.isFinite(datasetId) || !name || !summary) {
+        return null;
+    }
+
+    return {
+        id,
+        name,
+        type: normalizeReportType(report.type),
+        created_at:
+            typeof report.created_at === "string"
+                ? report.created_at
+                : new Date().toISOString(),
+        size_kb: typeof report.size_kb === "string" ? report.size_kb : "0.0 KB",
+        status: report.status === "Failed" ? "Failed" : "Ready",
+        dataset_id: datasetId,
+        summary,
+        key_insights: Array.isArray(report.key_insights) ? report.key_insights.map(String) : [],
+        recommendations: Array.isArray(report.recommendations) ? report.recommendations.map(String) : [],
+        risks: Array.isArray(report.risks) ? report.risks.map(String) : [],
+        drivers: Array.isArray(report.drivers) ? report.drivers.map(String) : [],
+        kpis:
+            report.kpis && typeof report.kpis === "object"
+                ? Object.fromEntries(
+                    Object.entries(report.kpis as Record<string, unknown>).map(([key, value]) => [
+                        key,
+                        String(value),
+                    ])
+                )
+                : {},
+    };
 }
 
 function buildReportMarkdown(report: GeneratedReport): string {
@@ -144,13 +166,37 @@ function inRange(dateIso: string, range: DateRange): boolean {
 
 export default function ReportsPage() {
     const [reports, setReports] = useState<GeneratedReport[]>([]);
+    const [loadingReports, setLoadingReports] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [typeFilter, setTypeFilter] = useState<ReportTypeFilter>("All");
     const [dateRange, setDateRange] = useState<DateRange>("30d");
 
     useEffect(() => {
-        setReports(loadReports());
+        const fetchReports = async () => {
+            try {
+                const response = await apiFetch("/reports");
+                if (!response.ok) {
+                    throw new Error("Unable to load reports.");
+                }
+                const payload = await response.json();
+                if (!Array.isArray(payload)) {
+                    throw new Error("Invalid reports response.");
+                }
+                const normalized = payload
+                    .map((item) => normalizeReport(item))
+                    .filter((item): item is GeneratedReport => item !== null);
+                setReports(normalized);
+            } catch (e) {
+                const message = e instanceof Error ? e.message : "Unable to load reports.";
+                setError(message);
+                setReports([]);
+            } finally {
+                setLoadingReports(false);
+            }
+        };
+
+        fetchReports();
     }, []);
 
     const filteredReports = useMemo(
@@ -161,11 +207,6 @@ export default function ReportsPage() {
             }),
         [reports, typeFilter, dateRange]
     );
-
-    const persistReports = (next: GeneratedReport[]) => {
-        setReports(next);
-        saveReports(next);
-    };
 
     const generateReport = async () => {
         setGenerating(true);
@@ -225,12 +266,9 @@ export default function ReportsPage() {
             if (typeof business?.total_profit === "number") kpis["Total Profit"] = business.total_profit.toLocaleString(undefined, { maximumFractionDigits: 0 });
             if (typeof business?.profit_margin_pct === "number") kpis["Profit Margin %"] = business.profit_margin_pct.toFixed(2);
 
-            const tempReport: GeneratedReport = {
-                id: `${Date.now()}`,
+            const draftReport = {
                 name: `${datasetName} - ${new Date().toLocaleDateString()} Report`,
                 type: "Executive",
-                created_at: new Date().toISOString(),
-                size_kb: "0.0 KB",
                 status: "Ready",
                 dataset_id: datasetId,
                 summary,
@@ -239,18 +277,48 @@ export default function ReportsPage() {
                 risks,
                 drivers,
                 kpis,
-            };
+            } satisfies Omit<GeneratedReport, "id" | "created_at" | "size_kb">;
 
-            const markdown = buildReportMarkdown(tempReport);
-            const report: GeneratedReport = {
-                ...tempReport,
-                size_kb: estimateSizeKb(markdown),
-            };
+            const markdown = buildReportMarkdown({
+                id: -1,
+                created_at: new Date().toISOString(),
+                size_kb: "0.0 KB",
+                ...draftReport,
+            });
+            const sizeKb = estimateSizeKb(markdown);
 
-            persistReports([report, ...reports]);
+            const createRes = await apiFetch("/reports", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ...draftReport,
+                    size_kb: sizeKb,
+                    content_markdown: markdown,
+                }),
+            });
+            if (!createRes.ok) {
+                let message = "Failed to save report.";
+                try {
+                    const body = await createRes.json();
+                    message = body.detail || message;
+                } catch {
+                    // Ignore JSON parse errors.
+                }
+                throw new Error(message);
+            }
+
+            const createdRaw = await createRes.json();
+            const created = normalizeReport(createdRaw);
+            if (!created) {
+                throw new Error("Backend returned invalid report payload.");
+            }
+
+            setReports((prev) => [created, ...prev]);
+            await trackEvent("frontend_report_generated", { report_id: created.id, dataset_id: created.dataset_id });
         } catch (e) {
             const message = e instanceof Error ? e.message : "Failed to generate report.";
             setError(message);
+            await trackEvent("frontend_report_generate_failed", {});
         } finally {
             setGenerating(false);
         }
@@ -296,9 +364,68 @@ export default function ReportsPage() {
         doc.save(`${safeName || "report"}.pdf`);
     };
 
-    const deleteReport = (reportId: string) => {
-        const next = reports.filter((report) => report.id !== reportId);
-        persistReports(next);
+    const deleteReport = async (reportId: number) => {
+        try {
+            const response = await apiFetch(`/reports/${reportId}`, { method: "DELETE" });
+            if (!response.ok) {
+                throw new Error("Failed to delete report.");
+            }
+            setReports((prev) => prev.filter((report) => report.id !== reportId));
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to delete report.";
+            setError(message);
+        }
+    };
+
+    const shareReport = async (reportId: number) => {
+        try {
+            const response = await apiFetch(`/reports/${reportId}/share`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expires_in_hours: 168 }),
+            });
+            if (!response.ok) throw new Error("Failed to create share link.");
+            const payload = await response.json();
+            const absoluteUrl = `${window.location.origin}${String(payload.share_url || "")}`;
+            await navigator.clipboard.writeText(absoluteUrl);
+            setError(null);
+            window.alert("Share link copied to clipboard.");
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to share report.";
+            setError(message);
+        }
+    };
+
+    const commentReport = async (reportId: number) => {
+        const body = window.prompt("Add a comment for collaborators:");
+        if (!body || !body.trim()) return;
+        try {
+            const response = await apiFetch(`/reports/${reportId}/comments`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ body: body.trim() }),
+            });
+            if (!response.ok) throw new Error("Failed to save comment.");
+            setError(null);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to add comment.";
+            setError(message);
+        }
+    };
+
+    const approveReport = async (reportId: number) => {
+        try {
+            const response = await apiFetch(`/reports/${reportId}/approval`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "approved", note: "Approved from reports page." }),
+            });
+            if (!response.ok) throw new Error("Failed to approve report.");
+            setError(null);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to approve report.";
+            setError(message);
+        }
     };
 
     return (
@@ -344,7 +471,14 @@ export default function ReportsPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    {filteredReports.length === 0 ? (
+                    {loadingReports ? (
+                        <div className="p-8 text-center text-sm text-muted-foreground">
+                            <div className="inline-flex items-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Loading reports...
+                            </div>
+                        </div>
+                    ) : filteredReports.length === 0 ? (
                         <div className="p-8 text-center text-sm text-muted-foreground">
                             No reports found for the selected filter.
                         </div>
@@ -406,7 +540,28 @@ export default function ReportsPage() {
                                                     <FileText className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => deleteReport(report.id)}
+                                                    onClick={() => void shareReport(report.id)}
+                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    title="Create Share Link"
+                                                >
+                                                    <Share2 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => void commentReport(report.id)}
+                                                    className="text-muted-foreground hover:text-primary transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    title="Add Comment"
+                                                >
+                                                    <MessageSquare className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => void approveReport(report.id)}
+                                                    className="text-muted-foreground hover:text-emerald-600 transition-colors p-2 hover:bg-secondary rounded-md"
+                                                    title="Approve Report"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => void deleteReport(report.id)}
                                                     className="text-muted-foreground hover:text-destructive transition-colors p-2 hover:bg-secondary rounded-md"
                                                     title="Delete"
                                                 >

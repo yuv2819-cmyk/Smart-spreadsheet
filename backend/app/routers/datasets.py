@@ -11,6 +11,8 @@ from app.database import get_db
 from app.models import AIQuery, DataRow, Dataset
 from app.rate_limit import rate_limit
 from app.schemas import DataUploadResponse, Dataset as DatasetSchema, DatasetCreate
+from app.services.events_service import track_event
+from app.services.plan_service import enforce_row_limit
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 settings = get_settings()
@@ -117,6 +119,13 @@ async def upload_new_dataset(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Failed to parse CSV: {str(exc)}")
 
+    await enforce_row_limit(
+        db,
+        tenant_id=context.tenant_id,
+        user_id=context.user_id,
+        row_count=int(len(df)),
+    )
+
     await _clear_tenant_data(db, context.tenant_id)
 
     schema_info = {col: str(df[col].dtype) for col in df.columns}
@@ -147,6 +156,17 @@ async def upload_new_dataset(
 
     await db.commit()
     await db.refresh(new_dataset)
+    await track_event(
+        db,
+        context=context,
+        event_name="dataset_uploaded",
+        payload={
+            "dataset_id": new_dataset.id,
+            "rows_imported": int(len(df)),
+            "file_name": file.filename,
+        },
+    )
+    await db.commit()
 
     return DataUploadResponse(
         dataset_id=new_dataset.id,
@@ -201,5 +221,12 @@ async def clear_dataset(
 ):
     """Clear all datasets for the authenticated tenant."""
     await _clear_tenant_data(db, context.tenant_id)
+    await db.commit()
+    await track_event(
+        db,
+        context=context,
+        event_name="dataset_cleared",
+        payload={},
+    )
     await db.commit()
     return {"message": "Dataset cleared successfully"}

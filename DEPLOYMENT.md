@@ -19,9 +19,9 @@ TRUSTED_HOSTS=your-backend-domain
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
 ENABLE_HTTPS_REDIRECT=true
-# This repo currently uses SQLAlchemy `create_all` for initial schema creation (no Alembic migrations yet).
-# Keep AUTO_CREATE_SCHEMA=true for first deploy so tables exist for signup/upload.
-AUTO_CREATE_SCHEMA=true
+# Use Alembic migrations for schema changes.
+# Keep AUTO_CREATE_SCHEMA=false in production.
+AUTO_CREATE_SCHEMA=false
 AUTO_SEED_MVP_RECORDS=false
 ```
 
@@ -66,6 +66,7 @@ Do not use `NEXT_PUBLIC_API_TOKEN` in production.
 - Keep `AUTO_CREATE_SCHEMA=false` in production.
 - Keep `AUTO_SEED_MVP_RECORDS=false` in production.
 - Rotate OpenAI and backend tokens if they were ever exposed.
+- Run `alembic upgrade head` from `backend/` during deploy.
 
 ## 4. Smoke Test After Deploy
 
@@ -86,3 +87,7 @@ Edit `.env` first with real secrets.
 
 Notes:
 - When using Docker Compose, include `backend` in `TRUSTED_HOSTS` (the internal service hostname used by the Next.js proxy).
+
+## 6. Operator Runbook
+
+For migration and connector-sync procedures, see `docs/OPERATOR_RUNBOOK.md`.
