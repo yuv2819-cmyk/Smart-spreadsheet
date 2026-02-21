@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.numeric_parsing import prepare_numeric_dataframe
+
 DATE_HINT_TOKENS = ("date", "time", "month", "year", "day")
 REVENUE_HINT_TOKENS = ("revenue", "sales", "amount", "total", "gmv", "value")
 VOLUME_HINT_TOKENS = ("quantity", "qty", "units", "orders", "count", "volume")
@@ -1179,7 +1181,8 @@ def build_nlq_insight(
             "recommended_actions": ["Upload a dataset and ask a business question."],
         }
 
-    insights = analyst_insights or build_analyst_insights(df)
+    working_df, _, _ = prepare_numeric_dataframe(df)
+    insights = analyst_insights or build_analyst_insights(working_df)
     simplified_trend = insights.get("simplified_trend") if isinstance(insights, dict) else None
     chart_points = (simplified_trend or {}).get("points", []) if simplified_trend else []
     chart_series = []
@@ -1203,7 +1206,7 @@ def build_nlq_insight(
         else None
     )
 
-    monthly_payload = _build_monthly_business_frame(df)
+    monthly_payload = _build_monthly_business_frame(working_df)
     target_period = None
     explanation_lines = list((insights.get("chart_explanations") or [])[:3])
     recommended_actions = list((insights.get("recommendations") or [])[:4])
@@ -1285,7 +1288,7 @@ def build_nlq_insight(
             ]
 
             period_driver = _build_period_segment_driver(
-                df=df,
+                df=working_df,
                 date_column=monthly_payload["date_column"],
                 target_period=target_period,
                 previous_period=previous_period,
@@ -1316,7 +1319,41 @@ def build_nlq_insight(
     }
 
 
-def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
+def _build_precision_audit(
+    *,
+    numeric_columns: list[str],
+    numeric_audit: dict[str, Any],
+) -> dict[str, Any]:
+    coerced_columns = list(numeric_audit.get("coerced_columns") or [])
+    ignored_columns = list(numeric_audit.get("ignored_columns") or [])
+    confidence = float(numeric_audit.get("coercion_confidence") or 1.0)
+
+    notes: list[str] = []
+    if coerced_columns:
+        notes.append(
+            f"Auto-converted {len(coerced_columns)} numeric-like columns to improve precision."
+        )
+    if ignored_columns:
+        notes.append(
+            f"{len(ignored_columns)} numeric-like columns were not auto-converted due to low confidence or identifier/date signals."
+        )
+    if not notes:
+        notes.append("No numeric coercion was required for this dataset.")
+
+    return {
+        "numeric_columns_used": [str(column) for column in numeric_columns],
+        "coerced_numeric_columns": coerced_columns,
+        "ignored_numeric_columns": ignored_columns,
+        "coercion_confidence": round(confidence, 4),
+        "notes": notes,
+    }
+
+
+def build_analyst_insights(
+    df: pd.DataFrame,
+    *,
+    numeric_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build deterministic analyst-style insights for a dataframe."""
     if df.empty:
         return {
@@ -1365,12 +1402,25 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
                 "negative_drivers": [],
             },
             "alerts": [],
+            "precision_audit": {
+                "numeric_columns_used": [],
+                "coerced_numeric_columns": [],
+                "ignored_numeric_columns": [],
+                "coercion_confidence": 1.0,
+                "notes": ["No dataset is loaded yet."],
+            },
         }
 
-    numeric_columns = df.select_dtypes(include=["number"]).columns.tolist()
-    date_columns, parsed_dates = _detect_date_columns(df)
+    if numeric_audit is None:
+        working_df, numeric_columns, effective_numeric_audit = prepare_numeric_dataframe(df)
+    else:
+        working_df = df
+        numeric_columns = working_df.select_dtypes(include=["number"]).columns.tolist()
+        effective_numeric_audit = numeric_audit
+
+    date_columns, parsed_dates = _detect_date_columns(working_df)
     categorical_columns = [
-        column for column in df.columns if column not in numeric_columns and column not in date_columns
+        column for column in working_df.columns if column not in numeric_columns and column not in date_columns
     ]
 
     revenue_column = _find_column_by_tokens(numeric_columns, REVENUE_HINT_TOKENS)
@@ -1386,24 +1436,30 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
     )
 
     revenue_series = (
-        pd.to_numeric(df[revenue_column], errors="coerce") if revenue_column and revenue_column in df.columns else None
+        pd.to_numeric(working_df[revenue_column], errors="coerce")
+        if revenue_column and revenue_column in working_df.columns
+        else None
     )
-    cost_series = pd.to_numeric(df[cost_column], errors="coerce") if cost_column and cost_column in df.columns else None
-    if profit_column and profit_column in df.columns:
-        profit_series = pd.to_numeric(df[profit_column], errors="coerce")
+    cost_series = (
+        pd.to_numeric(working_df[cost_column], errors="coerce")
+        if cost_column and cost_column in working_df.columns
+        else None
+    )
+    if profit_column and profit_column in working_df.columns:
+        profit_series = pd.to_numeric(working_df[profit_column], errors="coerce")
     elif revenue_series is not None and cost_series is not None:
         profit_series = revenue_series - cost_series
     else:
         profit_series = None
 
-    metric_column = _find_best_metric_column(list(df.columns), numeric_columns)
-    data_quality = _build_data_quality(df, categorical_columns)
-    numeric_profiles = _build_numeric_profiles(df, numeric_columns)
-    categorical_profiles = _build_categorical_profiles(df, categorical_columns)
-    correlations = _build_correlations(df, numeric_columns)
-    segments = _build_segment_insights(df, categorical_columns, metric_column)
-    trend = _build_trend_insight(df, date_columns, parsed_dates, metric_column)
-    kpis = _build_kpis(df, numeric_columns)
+    metric_column = _find_best_metric_column(list(working_df.columns), numeric_columns)
+    data_quality = _build_data_quality(working_df, categorical_columns)
+    numeric_profiles = _build_numeric_profiles(working_df, numeric_columns)
+    categorical_profiles = _build_categorical_profiles(working_df, categorical_columns)
+    correlations = _build_correlations(working_df, numeric_columns)
+    segments = _build_segment_insights(working_df, categorical_columns, metric_column)
+    trend = _build_trend_insight(working_df, date_columns, parsed_dates, metric_column)
+    kpis = _build_kpis(working_df, numeric_columns)
     business_summary = _build_business_summary(
         revenue_column=revenue_column,
         cost_column=cost_column,
@@ -1413,14 +1469,14 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         profit_series=profit_series,
     )
     profit_loss_breakdown = _build_profit_loss_breakdown(
-        df=df,
+        df=working_df,
         categorical_columns=categorical_columns,
         revenue_series=revenue_series,
         cost_series=cost_series,
         profit_series=profit_series,
     )
     simplified_trend = _build_simplified_trend(
-        df=df,
+        df=working_df,
         date_columns=date_columns,
         parsed_dates=parsed_dates,
         revenue_series=revenue_series,
@@ -1453,13 +1509,17 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         business_summary,
     )
     executive_summary = _build_executive_summary(
-        df=df,
+        df=working_df,
         numeric_columns=numeric_columns,
         categorical_columns=categorical_columns,
         data_quality=data_quality,
         trend=trend,
         segments=segments,
         business_summary=business_summary,
+    )
+    precision_audit = _build_precision_audit(
+        numeric_columns=numeric_columns,
+        numeric_audit=effective_numeric_audit,
     )
 
     return {
@@ -1478,4 +1538,5 @@ def build_analyst_insights(df: pd.DataFrame) -> dict[str, Any]:
         "chart_explanations": chart_explanations,
         "key_drivers": key_drivers,
         "alerts": alerts,
+        "precision_audit": precision_audit,
     }

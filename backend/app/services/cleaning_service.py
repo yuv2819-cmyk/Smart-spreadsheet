@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.numeric_parsing import parse_numeric_like_series
+
 
 def _is_string_column(series: pd.Series) -> bool:
     return pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series)
@@ -90,14 +92,7 @@ def _build_category_mapping(series: pd.Series) -> tuple[dict[str, str], int]:
 
 
 def _coerce_numeric_series(series: pd.Series) -> tuple[pd.Series, float]:
-    if pd.api.types.is_numeric_dtype(series):
-        return series, 1.0
-    coerced = pd.to_numeric(series, errors="coerce")
-    non_null = series[series.notna()]
-    if non_null.empty:
-        return series, 0.0
-    ratio = float(coerced[series.notna()].notna().mean())
-    return coerced, ratio
+    return parse_numeric_like_series(series)
 
 
 def _coerce_datetime_series(series: pd.Series) -> tuple[pd.Series, float]:

@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models import DataRow, Dataset
 from app.schemas import OverviewMetrics
 from app.services.analytics_service import build_analyst_insights
+from app.services.numeric_parsing import prepare_numeric_dataframe
 
 router = APIRouter(prefix="/overview", tags=["Overview"])
 settings = get_settings()
@@ -102,6 +103,13 @@ async def get_overview_metrics(
                     "negative_drivers": [],
                 },
                 "alerts": [],
+                "precision_audit": {
+                    "numeric_columns_used": [],
+                    "coerced_numeric_columns": [],
+                    "ignored_numeric_columns": [],
+                    "coercion_confidence": 1.0,
+                    "notes": ["No dataset is loaded yet."],
+                },
             },
         )
 
@@ -174,6 +182,13 @@ async def get_overview_metrics(
                     "negative_drivers": [],
                 },
                 "alerts": [],
+                "precision_audit": {
+                    "numeric_columns_used": [],
+                    "coerced_numeric_columns": [],
+                    "ignored_numeric_columns": [],
+                    "coercion_confidence": 1.0,
+                    "notes": ["Dataset has no rows yet."],
+                },
             },
         )
         _cache_metrics(dataset.id, cache_key, now, payload)
@@ -181,20 +196,23 @@ async def get_overview_metrics(
 
     row_data = [row.row_data for row in rows]
     df = pd.DataFrame(row_data)
+    prepared_df, numeric_cols, numeric_audit = prepare_numeric_dataframe(df)
 
-    numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
     basic_stats: dict[str, dict[str, float]] = {}
     for col in numeric_cols:
+        series = pd.to_numeric(prepared_df[col], errors="coerce").dropna()
+        if series.empty:
+            continue
         basic_stats[col] = {
-            "min": float(df[col].min()),
-            "max": float(df[col].max()),
-            "avg": float(df[col].mean()),
+            "min": float(series.min()),
+            "max": float(series.max()),
+            "avg": float(series.mean()),
         }
 
     chart_data: list[dict] = []
     if numeric_cols:
         label_col = None
-        string_cols = df.select_dtypes(include=["object", "string"]).columns.tolist()
+        string_cols = prepared_df.select_dtypes(include=["object", "string"]).columns.tolist()
         if string_cols:
             for col in string_cols:
                 if any(token in col.lower() for token in ["name", "date", "product", "month", "category"]):
@@ -203,7 +221,7 @@ async def get_overview_metrics(
             if not label_col:
                 label_col = string_cols[0]
 
-        subset = df.head(10).copy()
+        subset = prepared_df.head(10).copy()
         if label_col:
             subset["name"] = subset[label_col].astype(str)
         else:
@@ -211,7 +229,7 @@ async def get_overview_metrics(
 
         chart_data = subset[["name"] + numeric_cols].to_dict(orient="records")
 
-    analyst_insights = build_analyst_insights(df)
+    analyst_insights = build_analyst_insights(prepared_df, numeric_audit=numeric_audit)
 
     payload = OverviewMetrics(
         dataset_id=dataset.id,

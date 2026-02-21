@@ -93,10 +93,25 @@ export interface DataQualitySummary {
     inconsistent_categories?: DataQualityCategoryIssue[];
 }
 
+export interface PrecisionAuditColumn {
+    column: string;
+    parse_ratio: number;
+    reason?: string;
+}
+
+export interface PrecisionAuditSummary {
+    numeric_columns_used: string[];
+    coerced_numeric_columns: PrecisionAuditColumn[];
+    ignored_numeric_columns: PrecisionAuditColumn[];
+    coercion_confidence: number;
+    notes: string[];
+}
+
 export interface AnalystInsightsExt {
     executive_summary: string;
     recommendations: string[];
     data_quality: DataQualitySummary;
+    precision_audit?: PrecisionAuditSummary;
     business_summary?: BusinessSummary;
     profit_loss_breakdown?: ProfitLossBreakdown;
     simplified_trend?: SimplifiedTrend | null;
@@ -228,6 +243,7 @@ export default function BusinessInsightsSuite({
     const alerts = insights.alerts || [];
     const keyDrivers = insights.key_drivers || { positive_drivers: [], negative_drivers: [] };
     const quality = insights.data_quality;
+    const precisionAudit = insights.precision_audit;
     const profitLoss = insights.profit_loss_breakdown;
 
     const baselineRevenue = businessSummary?.total_revenue ?? 0;
@@ -501,7 +517,7 @@ export default function BusinessInsightsSuite({
 
             <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-xl p-6 shadow-sm">
                 <h3 className="font-semibold mb-4">Data Quality Health</h3>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                     <div className="rounded-lg border border-border/60 p-4">
                         <p className="text-xs text-muted-foreground">Completeness</p>
                         <p className="text-xl font-semibold">{quality.completeness_pct.toFixed(2)}%</p>
@@ -514,6 +530,17 @@ export default function BusinessInsightsSuite({
                     <div className="rounded-lg border border-border/60 p-4">
                         <p className="text-xs text-muted-foreground">Inconsistent Categories</p>
                         <p className="text-xl font-semibold">{quality.inconsistent_categories?.length || 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-border/60 p-4">
+                        <p className="text-xs text-muted-foreground">Precision Confidence</p>
+                        <p className="text-xl font-semibold">
+                            {precisionAudit?.coercion_confidence !== undefined
+                                ? `${(precisionAudit.coercion_confidence * 100).toFixed(1)}%`
+                                : "N/A"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            {(precisionAudit?.coerced_numeric_columns || []).length} auto-converted columns
+                        </p>
                     </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
@@ -548,6 +575,28 @@ export default function BusinessInsightsSuite({
                         </div>
                     </div>
                 </div>
+                {precisionAudit && (
+                    <div className="mt-4 rounded-lg border border-border/60 p-4">
+                        <p className="text-sm font-medium">Precision Audit Notes</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {precisionAudit.notes?.join(" ") || "No precision notes available."}
+                        </p>
+                        <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Auto-coerced</p>
+                                <p className="text-muted-foreground">
+                                    {(precisionAudit.coerced_numeric_columns || []).map((item) => item.column).join(", ") || "None"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Ignored Numeric-like</p>
+                                <p className="text-muted-foreground">
+                                    {(precisionAudit.ignored_numeric_columns || []).map((item) => item.column).join(", ") || "None"}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {showProfitLoss && profitLoss && (
