@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { Building2, Eye, EyeOff, Github, Loader2, Lock, Mail, User, UserPlus } from "lucide-react";
+import { Building2, Eye, EyeOff, Loader2, Lock, Mail, User, UserPlus } from "lucide-react";
 
 import AuthSplitLayout from "@/components/AuthSplitLayout";
 import { apiFetch } from "@/lib/api-client";
+import { networkApiErrorMessage, readApiErrorMessage } from "@/lib/api-errors";
 import { getAuthToken, setAuthSession } from "@/lib/auth";
 
 interface SignUpResponse {
@@ -34,6 +35,7 @@ export default function SignUpPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const errorId = "signup-form-error";
 
     useEffect(() => {
         if (getAuthToken()) {
@@ -47,6 +49,10 @@ export default function SignUpPage() {
 
         if (password.length < 8) {
             setError("Password must be at least 8 characters.");
+            return;
+        }
+        if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+            setError("Password must include at least one letter and one number.");
             return;
         }
         if (password !== confirmPassword) {
@@ -68,21 +74,14 @@ export default function SignUpPage() {
             });
 
             if (!response.ok) {
-                let message = "Sign up failed.";
-                try {
-                    const body = await response.json();
-                    message = body.detail || message;
-                } catch {
-                    // ignore json parse errors
-                }
-                throw new Error(message);
+                throw new Error(await readApiErrorMessage(response, "Sign up failed."));
             }
 
             const payload: SignUpResponse = await response.json();
-            setAuthSession(payload.access_token, payload.user);
+            setAuthSession(payload.access_token, payload.user, payload.expires_in, "local");
             router.replace("/overview");
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Unable to create account.");
+            setError(networkApiErrorMessage(err, "Unable to create account."));
         } finally {
             setLoading(false);
         }
@@ -90,16 +89,24 @@ export default function SignUpPage() {
 
     return (
         <AuthSplitLayout>
-            <div className="rounded-[30px] border border-white/10 bg-gradient-to-b from-[#121831]/95 to-[#0b1022]/95 px-6 py-8 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:px-9 sm:py-10">
+            <div
+                className="rounded-[32px] border border-[#2a4d78] px-6 py-8 shadow-[0_30px_95px_rgba(0,0,0,0.6)] backdrop-blur-xl sm:px-9 sm:py-10"
+                style={{
+                    background:
+                        "linear-gradient(155deg, rgba(8,17,40,0.95) 0%, rgba(6,15,37,0.94) 58%, rgba(4,12,30,0.94) 100%)",
+                }}
+            >
                 <div>
-                    <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">Create Account</h1>
+                    <h1 className="bg-gradient-to-r from-white via-sky-100 to-cyan-300 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent sm:text-5xl">
+                        Create Account
+                    </h1>
                     <p className="mt-3 text-sm text-slate-300 sm:text-base">
                         Start your insight-driven business workflow today.
                     </p>
                 </div>
 
                 {error && (
-                    <div className="mt-6 rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    <div id={errorId} role="alert" className="mt-6 rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
                         {error}
                     </div>
                 )}
@@ -108,13 +115,15 @@ export default function SignUpPage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-300" htmlFor="signup-name">Full Name</label>
                         <div className="relative">
-                            <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                            <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/50" />
                             <input
                                 id="signup-name"
                                 type="text"
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-[#050913] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
+                                aria-invalid={Boolean(error)}
+                                aria-describedby={error ? errorId : undefined}
+                                className="auth-input w-full rounded-xl border py-3 pl-11 pr-4 text-sm outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
                                 placeholder="Enter your full name"
                                 autoComplete="name"
                             />
@@ -124,13 +133,15 @@ export default function SignUpPage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-300" htmlFor="signup-workspace">Workspace Name</label>
                         <div className="relative">
-                            <Building2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                            <Building2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/50" />
                             <input
                                 id="signup-workspace"
                                 type="text"
                                 value={workspaceName}
                                 onChange={(e) => setWorkspaceName(e.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-[#050913] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
+                                aria-invalid={Boolean(error)}
+                                aria-describedby={error ? errorId : undefined}
+                                className="auth-input w-full rounded-xl border py-3 pl-11 pr-4 text-sm outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
                                 placeholder="Acme Analytics"
                             />
                         </div>
@@ -139,14 +150,16 @@ export default function SignUpPage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-300" htmlFor="signup-email">Email Address</label>
                         <div className="relative">
-                            <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                            <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/50" />
                             <input
                                 id="signup-email"
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
-                                className="w-full rounded-xl border border-white/10 bg-[#050913] py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
+                                aria-invalid={Boolean(error)}
+                                aria-describedby={error ? errorId : undefined}
+                                className="auth-input w-full rounded-xl border py-3 pl-11 pr-4 text-sm outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
                                 placeholder="you@example.com"
                                 autoComplete="email"
                             />
@@ -157,7 +170,7 @@ export default function SignUpPage() {
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-300" htmlFor="signup-password">Password</label>
                             <div className="relative">
-                                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/50" />
                                 <input
                                     id="signup-password"
                                     type={showPassword ? "text" : "password"}
@@ -165,14 +178,16 @@ export default function SignUpPage() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     minLength={8}
-                                    className="w-full rounded-xl border border-white/10 bg-[#050913] py-3 pl-11 pr-12 text-sm text-white outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
+                                    aria-invalid={Boolean(error)}
+                                    aria-describedby={error ? errorId : undefined}
+                                    className="auth-input w-full rounded-xl border py-3 pl-11 pr-12 text-sm outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
                                     placeholder="Min 8 characters"
                                     autoComplete="new-password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword((prev) => !prev)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:text-slate-200"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-cyan-200/55 transition hover:text-cyan-200"
                                     aria-label={showPassword ? "Hide password" : "Show password"}
                                 >
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -183,7 +198,7 @@ export default function SignUpPage() {
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-slate-300" htmlFor="signup-confirm">Confirm Password</label>
                             <div className="relative">
-                                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-200/50" />
                                 <input
                                     id="signup-confirm"
                                     type={showConfirmPassword ? "text" : "password"}
@@ -191,14 +206,16 @@ export default function SignUpPage() {
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
                                     minLength={8}
-                                    className="w-full rounded-xl border border-white/10 bg-[#050913] py-3 pl-11 pr-12 text-sm text-white outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
+                                    aria-invalid={Boolean(error)}
+                                    aria-describedby={error ? errorId : undefined}
+                                    className="auth-input w-full rounded-xl border py-3 pl-11 pr-12 text-sm outline-none transition focus:border-cyan-300/70 focus:ring-2 focus:ring-cyan-300/30"
                                     placeholder="Repeat password"
                                     autoComplete="new-password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowConfirmPassword((prev) => !prev)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition hover:text-slate-200"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-cyan-200/55 transition hover:text-cyan-200"
                                     aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                                 >
                                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -210,42 +227,13 @@ export default function SignUpPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(30,174,242,0.38)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ background: "linear-gradient(90deg, #22d3ee 0%, #2563eb 100%)" }}
                     >
                         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                         {loading ? "Creating Account..." : "Create Account"}
                     </button>
                 </form>
-
-                <div className="mt-8 flex items-center gap-4 text-xs text-slate-500">
-                    <span className="h-px flex-1 bg-white/10" />
-                    or continue with
-                    <span className="h-px flex-1 bg-white/10" />
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                    <button
-                        type="button"
-                        disabled
-                        className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#050913] px-4 py-3 text-sm font-medium text-slate-400"
-                    >
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                            <path
-                                fill="currentColor"
-                                d="M21.35 11.1h-9.18v2.98h5.28c-.23 1.47-1.76 4.3-5.28 4.3-3.18 0-5.77-2.63-5.77-5.88s2.59-5.88 5.77-5.88c1.81 0 3.02.77 3.72 1.43l2.54-2.44C16.82 4.1 14.72 3 12.17 3 7.2 3 3.17 7.03 3.17 12s4.03 9 9 9c5.2 0 8.65-3.66 8.65-8.82 0-.59-.06-1.04-.15-1.08Z"
-                            />
-                        </svg>
-                        Google
-                    </button>
-                    <button
-                        type="button"
-                        disabled
-                        className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#050913] px-4 py-3 text-sm font-medium text-slate-400"
-                    >
-                        <Github className="h-4 w-4" />
-                        GitHub
-                    </button>
-                </div>
 
                 <p className="mt-7 text-center text-sm text-slate-400">
                     Already have an account?{" "}
