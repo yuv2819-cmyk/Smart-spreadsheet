@@ -18,9 +18,11 @@ function normalizeBackendBaseUrl(raw: string): string {
 }
 
 const BACKEND_BASE_URL = normalizeBackendBaseUrl(RAW_BACKEND_BASE_URL);
-const BACKEND_API_TOKEN = (process.env.BACKEND_API_TOKEN || process.env.MVP_API_TOKEN || "").trim();
-const BACKEND_TENANT_ID = (process.env.BACKEND_TENANT_ID || "1").trim();
-const BACKEND_USER_ID = (process.env.BACKEND_USER_ID || "1").trim();
+const INTERNAL_SERVICE_TOKENS = new Set(
+    [process.env.BACKEND_API_TOKEN, process.env.MVP_API_TOKEN]
+        .map((value) => (value || "").trim())
+        .filter(Boolean)
+);
 
 const HOP_BY_HOP_HEADERS = new Set([
     "connection",
@@ -38,14 +40,6 @@ const HOP_BY_HOP_HEADERS = new Set([
     "content-encoding",
     "accept-encoding",
 ]);
-
-function resolveAuthToken(): string {
-    if (BACKEND_API_TOKEN) return BACKEND_API_TOKEN;
-    // In production, most requests should arrive with a user JWT from the browser.
-    // Keep the dev fallback for local workflows that use the legacy MVP API token.
-    if (process.env.NODE_ENV !== "production") return "dev-insecure-token";
-    return "";
-}
 
 function buildTargetUrl(path: string[], search: string): string {
     const safeBase = BACKEND_BASE_URL.replace(/\/+$/, "");
@@ -79,7 +73,16 @@ function allowsAnonymous(path: string[]): boolean {
     if (!joined) return true;
     if (joined === "health" || joined === "ready") return true;
     if (joined.startsWith("auth/signin") || joined.startsWith("auth/signup")) return true;
+    if (joined.startsWith("reports/public/")) return true;
     return false;
+}
+
+function extractBearerToken(headers: Headers): string {
+    const rawAuthorization = (headers.get("authorization") || "").trim();
+    if (!rawAuthorization) return "";
+    const [scheme, ...rest] = rawAuthorization.split(/\s+/);
+    if (!scheme || scheme.toLowerCase() !== "bearer" || rest.length === 0) return "";
+    return rest.join(" ").trim();
 }
 
 async function proxyRequest(req: NextRequest, path: string[]): Promise<NextResponse> {
@@ -97,20 +100,22 @@ async function proxyRequest(req: NextRequest, path: string[]): Promise<NextRespo
         }
     });
 
-    const hasIncomingAuth = headers.has("authorization");
-    if (!hasIncomingAuth) {
-        // Allow unauthenticated proxying for open endpoints (signup/signin/health/ready).
-        if (!allowsAnonymous(path)) {
-            const authToken = resolveAuthToken();
-            if (authToken) {
-                headers.set("Authorization", `Bearer ${authToken}`);
-                if (!headers.has("X-Tenant-Id")) headers.set("X-Tenant-Id", BACKEND_TENANT_ID);
-                if (!headers.has("X-User-Id")) headers.set("X-User-Id", BACKEND_USER_ID);
-            }
+    // Browser traffic must never control backend tenant/user impersonation headers.
+    headers.delete("x-tenant-id");
+    headers.delete("x-user-id");
+    headers.delete("x-internal-service-request");
+
+    if (!allowsAnonymous(path)) {
+        const browserToken = extractBearerToken(headers);
+        if (!browserToken) {
+            return NextResponse.json({ detail: "Authentication required." }, { status: 401 });
         }
-    } else {
-        headers.delete("x-tenant-id");
-        headers.delete("x-user-id");
+        if (INTERNAL_SERVICE_TOKENS.has(browserToken)) {
+            return NextResponse.json(
+                { detail: "Browser requests must use a user access token." },
+                { status: 401 }
+            );
+        }
     }
 
     const method = req.method.toUpperCase();
@@ -122,14 +127,12 @@ async function proxyRequest(req: NextRequest, path: string[]): Promise<NextRespo
     };
 
     let bodyBuffer: ArrayBuffer | undefined;
-    let bodyBytes: Buffer | undefined;
     if (!["GET", "HEAD"].includes(method)) {
         // Materialize request body so we can safely replay it on one-hop redirects
         // (e.g. FastAPI /reports -> /reports/) without stream reuse errors.
         bodyBuffer = await req.arrayBuffer();
         if (bodyBuffer.byteLength > 0) {
-            bodyBytes = Buffer.from(bodyBuffer);
-            requestInit.body = bodyBytes;
+            requestInit.body = bodyBuffer;
         }
     }
 
@@ -151,8 +154,8 @@ async function proxyRequest(req: NextRequest, path: string[]): Promise<NextRespo
             if (upstreamResponse.status === 303) {
                 retryInit.method = "GET";
                 delete retryInit.body;
-            } else if (!["GET", "HEAD"].includes(method) && bodyBytes && bodyBytes.length > 0) {
-                retryInit.body = bodyBytes;
+            } else if (!["GET", "HEAD"].includes(method) && bodyBuffer && bodyBuffer.byteLength > 0) {
+                retryInit.body = bodyBuffer;
             }
 
             upstreamResponse = await fetch(redirectUrl, retryInit);
