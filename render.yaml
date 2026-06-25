@@ -1,0 +1,49 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deploy: connect this GitHub repo in Render and apply the blueprint,
+# or use Dashboard -> New -> Blueprint -> select this repo.
+
+databases:
+  - name: smart-spreadsheet-db
+    databaseName: smart_spreadsheet
+    user: smart_spreadsheet
+    plan: free
+
+services:
+  - type: web
+    name: smart-spreadsheet-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: staging
+      - key: AUTO_CREATE_SCHEMA
+        value: "true"
+      - key: AUTO_SEED_MVP_RECORDS
+        value: "false"
+      - key: ALLOW_DEV_AUTH_FALLBACK
+        value: "false"
+      - key: RATE_LIMIT_BACKEND
+        value: memory
+      - key: RUN_SCHEDULERS
+        value: "false"
+      - key: ENABLE_API_DOCS
+        value: "false"
+      - key: ENABLE_HTTPS_REDIRECT
+        value: "true"
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+      - key: AUTH_ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: ALLOWED_ORIGINS
+        value: https://smart-spreadsheet-nu.vercel.app,https://smart-spreadsheet-z47o.vercel.app
+      - key: TRUSTED_HOSTS
+        value: smart-spreadsheet-api.onrender.com,localhost,127.0.0.1
+      - key: AUTH_JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smart-spreadsheet-db
+          property: connectionString

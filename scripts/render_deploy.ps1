@@ -1,0 +1,28 @@
+param(
+    [string]$FrontendOrigin = "https://smart-spreadsheet-nu.vercel.app"
+)
+
+$ErrorActionPreference = "Stop"
+
+Write-Host "Render deployment helper"
+Write-Host ""
+Write-Host "1) Open Render and create a Blueprint from this repo:"
+Write-Host "   https://dashboard.render.com/blueprints"
+Write-Host ""
+Write-Host "2) Select repo: yuv2819-cmyk/Smart-spreadsheet"
+Write-Host "   Render will read render.yaml and create:"
+Write-Host "   - PostgreSQL (free)"
+Write-Host "   - Web service: smart-spreadsheet-api (Docker, backend/)"
+Write-Host ""
+Write-Host "3) After deploy, copy the Render URL (example):"
+Write-Host "   https://smart-spreadsheet-api.onrender.com"
+Write-Host ""
+Write-Host "4) In Vercel project settings, set:"
+Write-Host "   NEXT_PUBLIC_API_BASE=/api/backend"
+Write-Host "   BACKEND_API_URL=https://smart-spreadsheet-api.onrender.com"
+Write-Host ""
+Write-Host "5) Update Render env ALLOWED_ORIGINS if your Vercel domain differs:"
+Write-Host "   $FrontendOrigin"
+Write-Host ""
+Write-Host "Note: Render free web services sleep after ~15 min idle."
+Write-Host "First request after sleep may take 30-60 seconds."
