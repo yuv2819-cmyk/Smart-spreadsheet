@@ -1,12 +1,39 @@
 # Smart Spreadsheet
 
-AI-powered spreadsheet analytics app built with:
-- `frontend/`: Next.js (App Router, TypeScript)
-- `backend/`: FastAPI + SQLAlchemy
+CSV in. Charts, cleaning, and AI answers out.
 
-## Local Development
+A multi-tenant analytics app for SMB teams that need weekly numbers without writing SQL. Upload a messy export, get deterministic metrics first, then ask questions in plain language.
 
-### 1. Backend
+**Live:** [smart-spreadsheet-nu.vercel.app](https://smart-spreadsheet-nu.vercel.app)
+
+## What it does
+
+- Sign in to a tenant-isolated workspace
+- Upload CSVs and manage datasets
+- Overview metrics, trends, quality signals, KPI views
+- AI Q&A and summaries on top of calculated numbers
+- Data cleaning with preview, apply, and rollback
+- Reports with share / comment / approval
+- India mode: Apr–Mar fiscal year, INR formatting, India trend reports
+
+Core numbers come from backend calculations (Pandas), not from the model making up totals. The assistant sits on that layer.
+
+## Stack
+
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js App Router, TypeScript |
+| Backend | FastAPI, SQLAlchemy, Pandas |
+| Auth | JWT (`/auth/signup`, `/auth/signin`, `/auth/me`) |
+| Data | SQLite locally, PostgreSQL in production |
+| Deploy | Vercel frontend + proxied API, Docker / Railway-ready backend |
+
+Frontend never talks to the backend token directly. Requests go through `frontend/app/api/backend/[...path]/route.ts`.
+
+## Local development
+
+### Backend
+
 ```bash
 cd backend
 python -m venv venv
@@ -17,13 +44,15 @@ python init_db.py
 python -m uvicorn app.main:app --reload
 ```
 
-Optional local seed:
+Optional seed:
+
 ```bash
 set SEED_EXAMPLE=true
 python init_db.py
 ```
 
-### 2. Frontend
+### Frontend
+
 ```bash
 cd frontend
 npm install
@@ -32,81 +61,53 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Environment Variables
+## Environment
 
 ### Backend (`backend/.env`)
-Use `backend/.env.example` as the baseline.
 
-Required for production:
+Use `backend/.env.example`.
+
+Production requires:
+
 - `ENVIRONMENT=production`
 - `DATABASE_URL=postgresql+asyncpg://...`
-- `AUTH_JWT_SECRET=<long-random-secret>`
-- `ALLOWED_ORIGINS=https://your-frontend-domain`
-- `TRUSTED_HOSTS=your-backend-domain` (add `backend` too when using Docker Compose)
+- `AUTH_JWT_SECRET`
+- `ALLOWED_ORIGINS`
+- `TRUSTED_HOSTS`
 
 Common:
-- `OPENAI_API_KEY=...`
+
+- `OPENAI_API_KEY`
 - `OPENAI_MODEL=gpt-4o-mini`
-- `AUTH_JWT_SECRET=<long-random-secret>`
 - `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES=1440`
 - `MAX_UPLOAD_SIZE_BYTES=10485760`
 - `OVERVIEW_CACHE_TTL_SECONDS=30`
 
-### Frontend (`frontend/.env.local` or host env vars)
-Browser-side:
-- `NEXT_PUBLIC_API_BASE=/api/backend`
+### Frontend
 
-Server-side (used by Next.js proxy route):
-- `BACKEND_API_URL=http://127.0.0.1:8000` (local) or your backend URL
-- `BACKEND_API_TOKEN=<optional-fallback-service-token>`
+- `NEXT_PUBLIC_API_BASE=/api/backend`
+- `BACKEND_API_URL=http://127.0.0.1:8000`
+- `BACKEND_API_TOKEN` (optional service token)
 - `BACKEND_TENANT_ID=1`
 - `BACKEND_USER_ID=1`
 
-## Production Notes
-
-- Frontend now proxies API requests through `frontend/app/api/backend/[...path]/route.ts`, so backend auth token is not exposed to browsers.
-- India-focused mode is available from Settings (`Localization` tab), including:
-  - India fiscal year support (Apr-Mar)
-  - INR + Indian number formatting
-  - India trend overlays and India Trend report generation
-- Backend enforces production config validation:
-  - no SQLite in production
-  - requires `AUTH_JWT_SECRET`
-  - requires `ALLOWED_ORIGINS`
-  - requires non-default `TRUSTED_HOSTS`
-- Backend includes trusted host middleware, security headers, gzip, request IDs, and readiness probe (`/ready`).
-- Upload and AI routes are rate-limited.
-- Built-in JWT auth endpoints:
-  - `POST /auth/signup`
-  - `POST /auth/signin`
-  - `GET /auth/me`
-  - `POST /auth/logout`
+Production rejects SQLite, default hosts, and a missing JWT secret. Upload and AI routes are rate-limited. Ready probe: `GET /ready`.
 
 ## Docker
 
-### Development
 ```bash
 docker-compose up --build
 ```
 
-### Production-style compose
+Production-style:
+
 ```bash
 copy .env.prod.example .env
 docker-compose -f docker-compose.prod.yml up --build -d
 ```
 
-## Verification
+## Docs
 
-```bash
-# Frontend
-npm --prefix frontend run lint
-npm --prefix frontend run build
-
-# Backend
-python -m compileall backend/app backend/init_db.py
-```
-
-## Deployment
-
-See `DEPLOYMENT.md` for full production deployment steps (Vercel + Railway and alternatives).
-For production operations (Alembic migrations and connector sync runbook), see `docs/OPERATOR_RUNBOOK.md`.
+- [DEPLOYMENT.md](./DEPLOYMENT.md) — Vercel + Railway
+- [docs/OPERATOR_RUNBOOK.md](./docs/OPERATOR_RUNBOOK.md) — migrations and connector sync
+- [APP_BRIEF_REPORT.md](./APP_BRIEF_REPORT.md) — current product status
